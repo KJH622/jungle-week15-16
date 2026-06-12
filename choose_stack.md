@@ -8,7 +8,7 @@
 - 이후 추가 프로젝트에서도 해당 프레임워크를 활용 예정
 
 ### 각 기술 한 줄 요약
-- **Spring Boot**: Java 기반, 엔터프라이즈 표준. 설정보다 관례(Convention over Configuration) 철학
+- **Spring Boot**: Java 기반, 엔터프라이즈 표준. 설정보다 관례(Convention over Configuration) 철학, 대규모 트래픽 다룰 때
 - **FastAPI**: Python 기반, AI/ML 서버와 궁합 최고. 비동기 지원, 빠른 프로토타이핑
 - **NestJS**: Node.js 기반, TypeScript 친화적. Spring과 구조가 유사
 - **Next.js**: React 풀스택 프레임워크. 프론트+API를 한 곳에서 관리
