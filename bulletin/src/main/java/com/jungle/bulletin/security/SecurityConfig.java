@@ -3,6 +3,7 @@ package com.jungle.bulletin.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -27,8 +28,9 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS) // 세션 사용 안 함 (JWT 방식)
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll() // 회원가입/로그인은 누구나 접근 가능
-                        .anyRequest().authenticated()               // 나머지는 JWT 필요
+                        .requestMatchers("/api/auth/**").permitAll()              // 회원가입/로그인은 누구나
+                        .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll() // 게시글 조회는 누구나
+                        .anyRequest().authenticated()                             // 나머지는 JWT 필요
                 )
                 // JwtFilter를 UsernamePasswordAuthenticationFilter 앞에 끼워 넣음
                 .addFilterBefore(
