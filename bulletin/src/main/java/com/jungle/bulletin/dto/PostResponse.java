@@ -20,6 +20,7 @@ public class PostResponse {
     private List<String> tags;        // 태그 이름 목록
     private String domainName;        // 도메인 카테고리 이름
     private String projectTypeName;   // 성격 카테고리 이름
+    private String githubUrl;         // GitHub 저장소 URL
 
     // Post 엔티티를 받아서 필요한 필드만 골라 담는 생성자
     public PostResponse(Post post) {
@@ -33,5 +34,6 @@ public class PostResponse {
                 .map(Tag::getName).collect(Collectors.toList());  // 태그 엔티티 → 이름만 추출
         this.domainName = post.getDomain() != null ? post.getDomain().getName() : null;
         this.projectTypeName = post.getProjectType() != null ? post.getProjectType().getName() : null;
+        this.githubUrl = post.getGithubUrl(); // GitHub URL
     }
 }

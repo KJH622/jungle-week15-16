@@ -73,6 +73,9 @@ public class PostService {
                 .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다.")));
         }
 
+        // GitHub URL 저장
+        post.setGithubUrl(request.getGithubUrl());
+
         // save()는 id가 없으면 INSERT, 있으면 UPDATE 자동 판단
         return new PostResponse(postRepository.save(post));
     }
@@ -110,6 +113,9 @@ public class PostService {
             post.setProjectType(categoryRepository.findById(request.getProjectTypeId())
                 .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다.")));
         }
+
+        // GitHub URL 저장
+        post.setGithubUrl(request.getGithubUrl());
 
         return new PostResponse(postRepository.save(post));
     }

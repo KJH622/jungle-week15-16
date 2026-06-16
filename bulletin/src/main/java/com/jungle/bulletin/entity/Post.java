@@ -51,6 +51,9 @@ public class Post {
     @JoinColumn(name = "project_type_id")
     private Category projectType;
 
+    @Column
+    private String githubUrl; // GitHub 저장소 URL (선택)
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 

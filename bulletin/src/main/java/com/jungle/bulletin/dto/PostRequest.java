@@ -11,4 +11,5 @@ public class PostRequest {
     private List<String> tags;        // 태그 이름 목록 (없으면 자동 생성, 있으면 재사용)
     private Long domainId;            // 도메인 카테고리 id (미리 정해진 목록에서 선택)
     private Long projectTypeId;       // 성격 카테고리 id (미리 정해진 목록에서 선택)
+    private String githubUrl; // GitHub URL (선택, null 허용)
 }
