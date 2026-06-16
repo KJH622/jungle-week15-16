@@ -1,31 +1,33 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
 
 export default function PostListPage() {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
-
-  // 필터/검색 상태
-  const [keyword, setKeyword] = useState('')
-  const [domainId, setDomainId] = useState('')
-  const [projectTypeId, setProjectTypeId] = useState('')
-  const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
-
-  // 카테고리 목록 (드롭다운용)
   const [domains, setDomains] = useState([])
   const [projectTypes, setProjectTypes] = useState([])
 
+  // URL 쿼리스트링과 동기화된 상태
+  const [searchParams, setSearchParams] = useSearchParams()
+  const keyword = searchParams.get('keyword') || ''
+  const domainId = searchParams.get('domainId') || ''
+  const projectTypeId = searchParams.get('projectTypeId') || ''
+  const page = parseInt(searchParams.get('page') || '0')
+
+  // 검색창 로컬 상태 (한국어 IME 조합 중 URL 업데이트 방지)
+  const [inputValue, setInputValue] = useState(keyword)
+
   const navigate = useNavigate()
 
-  // 마운트 시 카테고리 목록 1회만 가져오기
+  // 카테고리 목록 1회 로드
   useEffect(() => {
     api.get('/categories?type=DOMAIN').then((res) => setDomains(res.data))
     api.get('/categories?type=PROJECT_TYPE').then((res) => setProjectTypes(res.data))
   }, [])
 
-  // keyword, domainId, projectTypeId, page 가 바뀔 때마다 게시글 재조회
+  // URL 파라미터가 바뀔 때마다 게시글 재조회
   useEffect(() => {
     setLoading(true)
     const params = { page, size: 10 }
@@ -35,17 +37,23 @@ export default function PostListPage() {
 
     api.get('/posts', { params })
       .then((res) => {
-        setPosts(res.data.content)          // 페이징 응답의 실제 목록
-        setTotalPages(res.data.totalPages)  // 전체 페이지 수
+        setPosts(res.data.content)
+        setTotalPages(res.data.totalPages)
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [keyword, domainId, projectTypeId, page])
 
-  // 검색창 엔터 또는 버튼 클릭 시 page를 0으로 리셋
-  const handleSearch = (e) => {
-    e.preventDefault()
-    setPage(0) // 검색어 바뀌면 첫 페이지로
+  // URL 쿼리스트링 업데이트 헬퍼
+  const updateParams = (updates) => {
+    const next = {}
+    if (keyword) next.keyword = keyword
+    if (domainId) next.domainId = domainId
+    if (projectTypeId) next.projectTypeId = projectTypeId
+    if (page) next.page = page
+    // 변경사항 덮어쓰기 + page는 항상 0으로 리셋 (page 직접 변경 시 제외)
+    Object.assign(next, updates)
+    setSearchParams(next)
   }
 
   const handleLogout = () => {
@@ -55,7 +63,6 @@ export default function PostListPage() {
 
   return (
     <div style={styles.container}>
-      {/* 헤더 */}
       <div style={styles.header}>
         <h1 style={styles.title}>사이드 프로젝트 게시판</h1>
         <div style={styles.headerRight}>
@@ -64,40 +71,41 @@ export default function PostListPage() {
         </div>
       </div>
 
-      {/* 검색 + 필터 */}
-      <form onSubmit={handleSearch} style={styles.searchBar}>
+      {/* 검색 + 필터 — 값 변경 시 URL 업데이트 */}
+      <div style={styles.searchBar}>
         <input
           style={styles.searchInput}
           type="text"
-          placeholder="키워드 검색..."
-          value={keyword}
-          onChange={(e) => { setKeyword(e.target.value); setPage(0) }}
+          placeholder="키워드 검색... (Enter로 검색)"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}          // 로컬 state만 업데이트
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') updateParams({ keyword: inputValue, page: 0 }) // Enter 시 URL 반영
+          }}
+          onBlur={() => updateParams({ keyword: inputValue, page: 0 })} // 포커스 벗어날 때도 반영
         />
-        {/* 도메인 드롭다운 */}
         <select
           style={styles.select}
           value={domainId}
-          onChange={(e) => { setDomainId(e.target.value); setPage(0) }}
+          onChange={(e) => updateParams({ domainId: e.target.value, page: 0 })}
         >
           <option value="">전체 도메인</option>
           {domains.map((d) => (
             <option key={d.id} value={d.id}>{d.name}</option>
           ))}
         </select>
-        {/* 프로젝트 유형 드롭다운 */}
         <select
           style={styles.select}
           value={projectTypeId}
-          onChange={(e) => { setProjectTypeId(e.target.value); setPage(0) }}
+          onChange={(e) => updateParams({ projectTypeId: e.target.value, page: 0 })}
         >
           <option value="">전체 유형</option>
           {projectTypes.map((pt) => (
             <option key={pt.id} value={pt.id}>{pt.name}</option>
           ))}
         </select>
-      </form>
+      </div>
 
-      {/* 게시글 목록 */}
       {loading ? (
         <div style={styles.center}>로딩 중...</div>
       ) : posts.length === 0 ? (
@@ -107,7 +115,6 @@ export default function PostListPage() {
           {posts.map((post) => (
             <div key={post.id} style={styles.card} onClick={() => navigate(`/posts/${post.id}`)}>
               <h2 style={styles.postTitle}>{post.title}</h2>
-              {/* 태그 목록 */}
               {post.tags && post.tags.length > 0 && (
                 <div style={styles.tags}>
                   {post.tags.map((tag, index) => (
@@ -123,21 +130,20 @@ export default function PostListPage() {
         </div>
       )}
 
-      {/* 페이지네이션 */}
       {totalPages > 1 && (
         <div style={styles.pagination}>
           <button
             style={styles.pageBtn}
-            disabled={page === 0}              // 첫 페이지면 이전 버튼 비활성화
-            onClick={() => setPage(page - 1)}
+            disabled={page === 0}
+            onClick={() => updateParams({ page: page - 1 })}
           >
             이전
           </button>
           <span style={styles.pageInfo}>{page + 1} / {totalPages}</span>
           <button
             style={styles.pageBtn}
-            disabled={page === totalPages - 1}  // 마지막 페이지면 다음 버튼 비활성화
-            onClick={() => setPage(page + 1)}
+            disabled={page === totalPages - 1}
+            onClick={() => updateParams({ page: page + 1 })}
           >
             다음
           </button>
