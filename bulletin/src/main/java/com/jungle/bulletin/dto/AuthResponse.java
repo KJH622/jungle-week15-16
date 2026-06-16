@@ -9,4 +9,5 @@ import lombok.Getter;
 public class AuthResponse {
 
     private String token; // 발급된 JWT 토큰
+    private String nickname; // 로그인한 유저 닉네임 추가
 }

@@ -32,6 +32,7 @@ export default function LoginPage() {
         })
         // JWT 토큰을 localStorage에 저장
         localStorage.setItem('token', res.data.token)
+        localStorage.setItem('nickname', res.data.nickname) // 닉네임 저장
         navigate('/posts')
 
       } else {

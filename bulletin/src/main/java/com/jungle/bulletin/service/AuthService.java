@@ -46,6 +46,6 @@ public class AuthService {
         }
 
         String token = jwtUtil.generateToken(user.getEmail()); // JWT 발급
-        return new AuthResponse(token); // 토큰 담아서 반환
+        return new AuthResponse(token, user.getNickname()); // token 담아서 반환 + nickname 추가
     }
 }

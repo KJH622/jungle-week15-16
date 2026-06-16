@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'       // 로그인/회원가입 화면
 import PostListPage from './pages/PostListPage' // 게시글 목록 화면
-import ProtectedRoute from './components/ProtectedRoute' // 인증 게이트키퍼
+import ProtectedRoute from './components/ProtectedRoute'   // 인증 게이트키퍼
+import PostDetailPage from './pages/PostDetailPage'        // 게시글 상세 화면
 
 function App() {
   return (
@@ -21,6 +22,16 @@ function App() {
           element={
             <ProtectedRoute>
               <PostListPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* /posts/:id → 게시글 상세 (로그인 필수) */}
+        <Route
+          path="/posts/:id"
+          element={
+            <ProtectedRoute>
+              <PostDetailPage />
             </ProtectedRoute>
           }
         />
