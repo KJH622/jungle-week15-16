@@ -99,6 +99,12 @@ export default function PostDetailPage() {
             ))}
           </div>
         )}
+        {/* GitHub URL */}
+        {post.githubUrl && (
+          <p style={styles.githubLink}>
+            🔗 <a href={post.githubUrl} target="_blank" rel="noopener noreferrer">{post.githubUrl}</a>
+          </p>
+        )}
         <p style={styles.content}>{post.content}</p>
       </div>
 
@@ -181,4 +187,5 @@ const styles = {
   postActions: { display: 'flex', gap: '0.5rem', flexShrink: 0 },
   category: { display: 'flex', gap: '0.4rem', marginBottom: '0.75rem' },
   categoryBadge: { fontSize: '0.75rem', background: '#f1f3f5', color: '#495057', padding: '0.2rem 0.5rem', borderRadius: '4px' },
+  githubLink: { fontSize: '0.9rem', marginBottom: '1rem', color: '#495057' },
 }

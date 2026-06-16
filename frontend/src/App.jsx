@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage'       // 로그인/회원가입 화면
 import PostListPage from './pages/PostListPage' // 게시글 목록 화면
 import ProtectedRoute from './components/ProtectedRoute'   // 인증 게이트키퍼
 import PostDetailPage from './pages/PostDetailPage'        // 게시글 상세 화면
+import PostFormPage from './pages/PostFormPage'            // 게시글 작성/수정 화면
 
 function App() {
   return (
@@ -32,6 +33,25 @@ function App() {
           element={
             <ProtectedRoute>
               <PostDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* /posts/new → 게시글 작성 (로그인 필수) */}
+        <Route
+          path="/posts/new"
+          element={
+            <ProtectedRoute>
+              <PostFormPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* /posts/:id/edit → 게시글 수정 (로그인 필수) */}
+        <Route
+          path="/posts/:id/edit"
+          element={
+            <ProtectedRoute>
+              <PostFormPage />
             </ProtectedRoute>
           }
         />
