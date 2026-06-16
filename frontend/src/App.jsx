@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import LoginPage from './pages/LoginPage' // 로그인/회원가입 화면
+import LoginPage from './pages/LoginPage'       // 로그인/회원가입 화면
+import PostListPage from './pages/PostListPage' // 게시글 목록 화면
+import ProtectedRoute from './components/ProtectedRoute' // 인증 게이트키퍼
 
 function App() {
   return (
@@ -13,8 +15,15 @@ function App() {
         {/* /login → 로그인/회원가입 화면 */}
         <Route path="/login" element={<LoginPage />} />
 
-        {/* /posts → 게시글 목록 (다음 이슈에서 구현) */}
-        <Route path="/posts" element={<div style={{ padding: '2rem' }}>게시글 목록 (준비 중)</div>} />
+        {/* /posts → 로그인 필수 → 게시글 목록 */}
+        <Route
+          path="/posts"
+          element={
+            <ProtectedRoute>
+              <PostListPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   )
