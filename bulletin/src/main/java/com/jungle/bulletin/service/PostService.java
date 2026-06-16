@@ -6,6 +6,9 @@ import com.jungle.bulletin.entity.Post;
 import com.jungle.bulletin.entity.User;
 import com.jungle.bulletin.repository.PostRepository;
 import com.jungle.bulletin.repository.UserRepository;
+import com.jungle.bulletin.entity.Tag;
+import com.jungle.bulletin.repository.TagRepository;
+import com.jungle.bulletin.repository.CategoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +21,8 @@ public class PostService {
 
     private final PostRepository postRepository;
     private final UserRepository userRepository;
+    private final TagRepository tagRepository;
+    private final CategoryRepository categoryRepository;
 
     // 전체 목록 조회 — DB에서 최신순으로 가져온 뒤 엔티티 → DTO 변환
     public List<PostResponse> getAllPosts() {
@@ -45,6 +50,27 @@ public class PostService {
         post.setContent(request.getContent());
         post.setAuthor(author); // 작성자 설정
 
+        // 태그 처리 — 있으면 재사용, 없으면 새로 생성 후 저장
+        if (request.getTags() != null) {
+            List<Tag> tags = request.getTags().stream()
+                .map(name -> tagRepository.findByName(name)
+                    .orElseGet(() -> tagRepository.save(new Tag(name)))) // 없으면 insert
+                .collect(Collectors.toList());
+            post.setTags(tags);
+        }
+
+        // 도메인 카테고리 — id로 조회 후 게시글에 연결 (없는 id면 예외)
+        if (request.getDomainId() != null) {
+            post.setDomain(categoryRepository.findById(request.getDomainId())
+                .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다.")));
+        }
+
+        // 성격 카테고리 — id로 조회 후 게시글에 연결 (없는 id면 예외)
+        if (request.getProjectTypeId() != null) {
+            post.setProjectType(categoryRepository.findById(request.getProjectTypeId())
+                .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다.")));
+        }
+
         // save()는 id가 없으면 INSERT, 있으면 UPDATE 자동 판단
         return new PostResponse(postRepository.save(post));
     }
@@ -61,6 +87,28 @@ public class PostService {
 
         post.setTitle(request.getTitle());
         post.setContent(request.getContent());
+
+        // 태그 처리 — 있으면 재사용, 없으면 새로 생성 후 저장
+        if (request.getTags() != null) {
+            List<Tag> tags = request.getTags().stream()
+                .map(name -> tagRepository.findByName(name)
+                    .orElseGet(() -> tagRepository.save(new Tag(name)))) // 없으면 insert
+                .collect(Collectors.toList());
+            post.setTags(tags);
+        }
+
+        // 도메인 카테고리 — id로 조회 후 게시글에 연결 (없는 id면 예외)
+        if (request.getDomainId() != null) {
+            post.setDomain(categoryRepository.findById(request.getDomainId())
+                .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다.")));
+        }
+
+        // 성격 카테고리 — id로 조회 후 게시글에 연결 (없는 id면 예외)
+        if (request.getProjectTypeId() != null) {
+            post.setProjectType(categoryRepository.findById(request.getProjectTypeId())
+                .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다.")));
+        }
+
         return new PostResponse(postRepository.save(post));
     }
 
