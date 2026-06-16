@@ -1,23 +1,20 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-
-// 페이지 컴포넌트 — 이후 하나씩 만들 예정
-// import LoginPage from './pages/LoginPage'
-// import PostListPage from './pages/PostListPage'
+import LoginPage from './pages/LoginPage' // 로그인/회원가입 화면
 
 function App() {
   return (
+    // BrowserRouter — URL 기반 라우팅 활성화 (history API 사용)
     <BrowserRouter>
+      {/* Routes — 현재 URL과 일치하는 Route 하나만 렌더링 */}
       <Routes>
-        {/* / 접속 시 /posts 로 자동 이동 */}
+        {/* / 접속 시 /posts 로 자동 리다이렉트 */}
         <Route path="/" element={<Navigate to="/posts" replace />} />
 
-        {/* 아래 라우트들은 페이지 컴포넌트 만들면서 하나씩 주석 해제 */}
-        {/* <Route path="/login" element={<LoginPage />} /> */}
-        {/* <Route path="/posts" element={<PostListPage />} /> */}
+        {/* /login → 로그인/회원가입 화면 */}
+        <Route path="/login" element={<LoginPage />} />
 
-        {/* 임시 페이지 — 라우터 동작 확인용 */}
+        {/* /posts → 게시글 목록 (다음 이슈에서 구현) */}
         <Route path="/posts" element={<div style={{ padding: '2rem' }}>게시글 목록 (준비 중)</div>} />
-        <Route path="/login" element={<div style={{ padding: '2rem' }}>로그인 (준비 중)</div>} />
       </Routes>
     </BrowserRouter>
   )
