@@ -11,6 +11,9 @@ import com.jungle.bulletin.repository.TagRepository;
 import com.jungle.bulletin.repository.CategoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,12 +27,11 @@ public class PostService {
     private final TagRepository tagRepository;
     private final CategoryRepository categoryRepository;
 
-    // 전체 목록 조회 — DB에서 최신순으로 가져온 뒤 엔티티 → DTO 변환
-    public List<PostResponse> getAllPosts() {
-        return postRepository.findAllByOrderByCreatedAtDesc()
-                .stream()
-                .map(PostResponse::new) // Post 엔티티 → PostResponse DTO 변환
-                .collect(Collectors.toList());
+    // 검색 + 카테고리 필터 + 페이징 — 조건 없으면 전체 조회
+    public Page<PostResponse> getAllPosts(String keyword, Long domainId, Long projectTypeId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size); // 페이지 번호, 페이지 크기로 Pageable 생성
+        return postRepository.search(keyword, domainId, projectTypeId, pageable)
+                .map(PostResponse::new); // Page<Post> → Page<PostResponse> 변환
     }
 
     // 단건 조회 — 없는 id면 orElseThrow()로 예외 발생 (Optional 활용)
