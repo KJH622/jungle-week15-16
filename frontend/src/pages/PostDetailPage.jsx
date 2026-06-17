@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/axios'
+import aiApi from '../api/aiApi'
 
 export default function PostDetailPage() {
   const { id } = useParams()   // URL에서 게시글 ID 추출
@@ -12,6 +13,7 @@ export default function PostDetailPage() {
   const [editingId, setEditingId] = useState(null)       // 수정 중인 댓글 ID
   const [editInput, setEditInput] = useState('')         // 수정 입력값
   const [loading, setLoading] = useState(true)
+  const [githubInfo, setGithubInfo] = useState(null)   // GitHub 레포 정보
 
   // 현재 로그인한 유저 닉네임 (내 댓글인지 확인용)
   const myNickname = localStorage.getItem('nickname')
@@ -25,6 +27,15 @@ export default function PostDetailPage() {
       setPost(postRes.data)
       setComments(commentRes.data)
       setLoading(false)
+
+      // github_url 있으면 MCP 서버에서 레포 정보 추가 조회
+      if (postRes.data.githubUrl) {
+        aiApi.get(`/mcp/github/repo?url=${encodeURIComponent(postRes.data.githubUrl)}`)
+          .then((res) => {
+            if (!res.data.error) setGithubInfo(res.data)
+          })
+          .catch(() => {}) // GitHub 조회 실패해도 게시글은 정상 표시
+      }
     }).catch(() => navigate('/posts')) // 없는 게시글이면 목록으로
   }, [id])
 
@@ -99,11 +110,37 @@ export default function PostDetailPage() {
             ))}
           </div>
         )}
-        {/* GitHub URL */}
+        {/* GitHub URL + MCP 레포 정보 카드 */}
         {post.githubUrl && (
-          <p style={styles.githubLink}>
-            🔗 <a href={post.githubUrl} target="_blank" rel="noopener noreferrer">{post.githubUrl}</a>
-          </p>
+          <>
+            <p style={styles.githubLink}>
+              🔗 <a href={post.githubUrl} target="_blank" rel="noopener noreferrer">{post.githubUrl}</a>
+            </p>
+            {githubInfo && (
+              <div style={styles.githubCard}>
+                <div style={styles.githubCardHeader}>
+                  <span style={styles.githubRepoName}>{githubInfo.full_name}</span>
+                  {githubInfo.language && (
+                    <span style={styles.langBadge}>{githubInfo.language}</span>
+                  )}
+                </div>
+                {githubInfo.description && (
+                  <p style={styles.githubDesc}>{githubInfo.description}</p>
+                )}
+                <div style={styles.githubStats}>
+                  <span style={styles.stat}>⭐ {githubInfo.stars.toLocaleString()}</span>
+                  <span style={styles.stat}>🍴 {githubInfo.forks.toLocaleString()}</span>
+                  <span style={styles.stat}>🐛 이슈 {githubInfo.open_issues.toLocaleString()}</span>
+                  <span style={styles.statMuted}>
+                    최근 커밋{' '}
+                    {githubInfo.last_commit_at
+                      ? new Date(githubInfo.last_commit_at).toLocaleDateString('ko-KR')
+                      : new Date(githubInfo.updated_at).toLocaleDateString('ko-KR')}
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
         )}
         <p style={styles.content}>{post.content}</p>
       </div>
@@ -187,5 +224,16 @@ const styles = {
   postActions: { display: 'flex', gap: '0.5rem', flexShrink: 0 },
   category: { display: 'flex', gap: '0.4rem', marginBottom: '0.75rem' },
   categoryBadge: { fontSize: '0.75rem', background: '#f1f3f5', color: '#495057', padding: '0.2rem 0.5rem', borderRadius: '4px' },
-  githubLink: { fontSize: '0.9rem', marginBottom: '1rem', color: '#495057' },
+  githubLink: { fontSize: '0.9rem', marginBottom: '0.5rem', color: '#495057' },
+  githubCard: {
+    border: '1px solid #dee2e6', borderRadius: '8px', padding: '1rem',
+    marginBottom: '1rem', background: '#f8f9fa',
+  },
+  githubCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' },
+  githubRepoName: { fontSize: '0.9rem', fontWeight: '600', color: '#212529' },
+  langBadge: { fontSize: '0.75rem', background: '#e7f5ff', color: '#339af0', padding: '0.15rem 0.5rem', borderRadius: '4px' },
+  githubDesc: { fontSize: '0.85rem', color: '#495057', marginBottom: '0.75rem', lineHeight: '1.5' },
+  githubStats: { display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' },
+  stat: { fontSize: '0.85rem', color: '#343a40' },
+  statMuted: { fontSize: '0.8rem', color: '#868e96', marginLeft: 'auto' },
 }

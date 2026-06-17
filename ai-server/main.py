@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import rag
+from routers import rag, mcp
 
 app = FastAPI()
 
@@ -14,6 +14,9 @@ app.add_middleware(
 
 # RAG 라우터 등록 — /rag/embed, /rag/search
 app.include_router(rag.router, prefix="/rag")
+
+# MCP 라우터 등록 — /mcp/github/repo
+app.include_router(mcp.router, prefix="/mcp")
 
 @app.get("/")
 def root():
