@@ -30,7 +30,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()              // 회원가입/로그인은 누구나
                         .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll()   // 게시글 조회는 누구나
-                        .requestMatchers(HttpMethod.POST, "/api/posts/*/improve").permitAll() // 개선 제안은 누구나
                         .requestMatchers(HttpMethod.GET, "/api/categories", "/api/categories/**").permitAll() // 카테고리 목록 조회는 누구나
                         .anyRequest().authenticated()                             // 나머지는 JWT 필요
                 )

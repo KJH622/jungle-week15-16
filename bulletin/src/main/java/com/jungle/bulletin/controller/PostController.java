@@ -55,10 +55,12 @@ public class PostController {
         return ResponseEntity.ok(postService.updatePost(id, request, email));
     }
 
-    // 프로젝트 개선 제안 — POST /api/posts/{id}/improve (인증 불필요, 누구나 요청 가능)
+    // 프로젝트 개선 제안 — POST /api/posts/{id}/improve (인증 필요)
     @PostMapping("/{id}/improve")
-    public ResponseEntity<Object> improveProject(@PathVariable Long id) {
-        return ResponseEntity.ok(postService.improveProject(id));
+    public ResponseEntity<Object> improveProject(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        return ResponseEntity.ok(postService.improveProject(id, authorizationHeader));
     }
 
     // 게시글 삭제 — DELETE /api/posts/{id} (인증 필요)

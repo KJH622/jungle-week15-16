@@ -146,7 +146,7 @@ public class PostService {
 
     // 프로젝트 개선 제안 — FastAPI /agent/improve 호출 후 결과 반환
     @SuppressWarnings("unchecked")
-    public java.util.Map<String, Object> improveProject(Long id) {
+    public java.util.Map<String, Object> improveProject(Long id, String authorizationHeader) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
 
@@ -159,6 +159,7 @@ public class PostService {
         try {
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.set("Authorization", authorizationHeader);
             org.springframework.http.HttpEntity<java.util.Map<String, String>> entity =
                     new org.springframework.http.HttpEntity<>(body, headers);
 
