@@ -53,8 +53,8 @@ export default function SearchPage() {
 
         <header className="page-header">
           <div className="page-title-row">
-            <h1 className="page-title">AI 프로젝트 검색</h1>
-            <AIBadge>RAG</AIBadge>
+            <h1 className="page-title">RAG 프로젝트 검색</h1>
+            <AIBadge>RAG 검색</AIBadge>
           </div>
           <p className="page-subtitle">
             자연어로 질문하면 게시글 내용을 바탕으로 답변하고 참고 게시글을 보여줍니다.
@@ -94,7 +94,7 @@ export default function SearchPage() {
           <section>
             <div className="answer-card" style={{ marginBottom: 12 }}>
               <div className="page-title-row" style={{ marginBottom: 14 }}>
-                <AIBadge>AI 답변</AIBadge>
+                <AIBadge>RAG 답변</AIBadge>
               </div>
               <p className="answer-text">{answer}</p>
             </div>

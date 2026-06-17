@@ -1,8 +1,9 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from openai import OpenAI
 import chromadb
 import os
+from typing import List, Optional
 from dotenv import load_dotenv
 from database import get_posts, get_post_by_id
 
@@ -21,6 +22,7 @@ class SearchRequest(BaseModel):
 class SimilarRequest(BaseModel):
     content: str     # 현재 게시글 본문
     exclude_id: int  # 현재 게시글 ID (결과에서 제외)
+    tags: List[str] = Field(default_factory=list)  # 현재 게시글 태그 (추천 근거 표시용)
 
 class SuggestTagsRequest(BaseModel):
     title: str    # 작성 중인 게시글 제목
@@ -33,6 +35,20 @@ def get_embedding(text: str) -> list:
         input=text
     )
     return response.data[0].embedding
+
+def parse_tags(tags_str: str) -> list[str]:
+    """ChromaDB 메타데이터에 저장된 쉼표 구분 태그 문자열을 리스트로 변환"""
+    if not tags_str:
+        return []
+    return [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+
+def distance_to_similarity(distance) -> Optional[int]:
+    """ChromaDB distance 값을 사용자에게 보여줄 0~100 유사도 점수로 변환"""
+    if distance is None:
+        return None
+    safe_distance = max(0, float(distance))
+    score = 1 / (1 + safe_distance)
+    return round(score * 100)
 
 @router.post("/embed")
 def embed_posts():
@@ -125,14 +141,24 @@ def similar_posts(request: SimilarRequest):
     )
 
     posts = []
-    for post_id, meta in zip(results["ids"][0], results["metadatas"][0]):
+    current_tags = set(request.tags or [])
+    distances = results.get("distances", [[]])[0]
+
+    for index, (post_id, meta) in enumerate(zip(results["ids"][0], results["metadatas"][0])):
         # 현재 게시글은 결과에서 제외
         if int(post_id) == request.exclude_id:
             continue
+        candidate_tags = parse_tags(meta.get("tags", ""))
+        matched_tags = [tag for tag in candidate_tags if tag in current_tags]
+        similarity = distance_to_similarity(distances[index] if index < len(distances) else None)
         posts.append({
             "id": int(post_id),
             "title": meta["title"],
             "author": meta["author"],
+            "tags": candidate_tags,
+            "matched_tags": matched_tags,
+            "similarity": similarity,
+            "reason": "본문 임베딩 벡터가 유사한 게시글입니다.",
         })
         if len(posts) == 3:  # 최대 3개만 반환
             break

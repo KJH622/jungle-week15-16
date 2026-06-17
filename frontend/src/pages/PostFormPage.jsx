@@ -170,7 +170,7 @@ export default function PostFormPage() {
         <header className="page-header">
           <h1 className="page-title">{isEdit ? '게시글 수정' : '새 게시글 작성'}</h1>
           <p className="page-subtitle">
-            프로젝트 소개와 GitHub URL을 함께 남기면 AI 추천 품질이 좋아집니다.
+            프로젝트 소개와 GitHub URL을 함께 남기면 GitHub API와 RAG 기반 태그 추천 품질이 좋아집니다.
           </p>
         </header>
 
@@ -237,7 +237,7 @@ export default function PostFormPage() {
                   onClick={handleSuggestTags}
                   disabled={loadingSuggestions || (!form.title.trim() && !form.content.trim())}
                 >
-                  {loadingSuggestions ? '분석 중...' : 'AI 태그 추천'}
+                  {loadingSuggestions ? '분석 중...' : '태그 추천'}
                 </Button>
               </div>
 
@@ -266,9 +266,9 @@ export default function PostFormPage() {
 
               <div className="ai-assist-box">
                 <div className="inline-row" style={{ marginBottom: suggestedTags.length ? 10 : 0 }}>
-                  <AIBadge>추천 태그</AIBadge>
+                  <AIBadge>GitHub API · RAG</AIBadge>
                   <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>
-                    GitHub topics와 유사 게시글 태그를 함께 참고합니다.
+                    GitHub topics와 RAG 유사 게시글 태그를 함께 참고합니다.
                   </span>
                 </div>
                 {suggestedTags.length > 0 && (

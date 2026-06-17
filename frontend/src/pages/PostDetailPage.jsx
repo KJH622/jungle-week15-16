@@ -23,7 +23,12 @@ export default function PostDetailPage() {
   const [editInput, setEditInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [githubInfo, setGithubInfo] = useState(null)
+  const [githubLoading, setGithubLoading] = useState(false)
+  const [githubError, setGithubError] = useState('')
   const [relatedPosts, setRelatedPosts] = useState([])
+  const [relatedLoading, setRelatedLoading] = useState(false)
+  const [relatedError, setRelatedError] = useState('')
+  const [relatedChecked, setRelatedChecked] = useState(false)
   const [improving, setImproving] = useState(false)
   const [improveResult, setImproveResult] = useState(null)
   const [confirm, setConfirm] = useState(null)
@@ -38,24 +43,38 @@ export default function PostDetailPage() {
       setPost(postRes.data)
       setComments(commentRes.data)
       setLoading(false)
+      setGithubInfo(null)
+      setGithubError('')
+      setRelatedPosts([])
+      setRelatedError('')
+      setRelatedChecked(false)
 
       if (postRes.data.githubUrl) {
+        setGithubLoading(true)
         aiApi.get(`/mcp/github/repo?url=${encodeURIComponent(postRes.data.githubUrl)}`)
           .then((res) => {
             if (!res.data.error) setGithubInfo(res.data)
+            else setGithubError(res.data.error)
           })
-          .catch(() => {})
+          .catch(() => setGithubError('GitHub API 정보를 불러오지 못했습니다.'))
+          .finally(() => setGithubLoading(false))
       }
 
       if (postRes.data.content) {
+        setRelatedLoading(true)
         aiApi.post('/rag/similar', {
           content: postRes.data.content,
           exclude_id: postRes.data.id,
+          tags: postRes.data.tags || [],
         })
           .then((res) => {
-            if (res.data.posts?.length > 0) setRelatedPosts(res.data.posts)
+            setRelatedPosts(res.data.posts || [])
           })
-          .catch(() => {})
+          .catch(() => setRelatedError('RAG 관련 게시글을 불러오지 못했습니다.'))
+          .finally(() => {
+            setRelatedLoading(false)
+            setRelatedChecked(true)
+          })
       }
     }).catch(() => navigate('/posts'))
   }, [id, navigate])
@@ -172,6 +191,16 @@ export default function PostDetailPage() {
                 GitHub {post.githubUrl} ↗
               </a>
 
+              {githubLoading && (
+                <div className="status-note">GitHub API에서 레포지토리 정보를 불러오는 중입니다.</div>
+              )}
+
+              {githubError && (
+                <div style={{ marginBottom: 16 }}>
+                  <ErrorMessage>{githubError}</ErrorMessage>
+                </div>
+              )}
+
               {githubInfo && (
                 <div className="github-card">
                   <div className="github-card__header">
@@ -191,6 +220,7 @@ export default function PostDetailPage() {
                         마지막 커밋 {new Date(lastCommit).toLocaleDateString('ko-KR')}
                       </span>
                     )}
+                    {githubInfo.cached && <span className="github-card__stat">캐시 사용</span>}
                   </div>
                 </div>
               )}
@@ -201,8 +231,11 @@ export default function PostDetailPage() {
 
           {post.githubUrl && (
             <div style={{ borderTop: '1px solid var(--color-bg)', marginTop: 24, paddingTop: 20 }}>
+              <p className="section-copy" style={{ marginBottom: 12 }}>
+                GitHub 레포 현황은 MCP 도구로 확인하고, RAG 유사 게시글을 함께 참고해 개선 제안을 만듭니다.
+              </p>
               <Button variant="ai" onClick={handleImprove} disabled={improving}>
-                {improving ? '분석 중...' : 'AI 개선 제안 받기'}
+                {improving ? '분석 중...' : 'Agent 개선 제안 받기'}
               </Button>
             </div>
           )}
@@ -214,7 +247,7 @@ export default function PostDetailPage() {
               ) : (
                 <>
                   <div className="page-title-row" style={{ marginBottom: 14 }}>
-                    <AIBadge>AI 개선 제안</AIBadge>
+                    <AIBadge>Agent 개선 제안</AIBadge>
                   </div>
                   <div className="source-list" style={{ marginBottom: improveResult.similar_posts?.length ? 16 : 0 }}>
                     {Array.isArray(improveResult.suggestions) && improveResult.suggestions.map((suggestion, index) => (
@@ -306,26 +339,43 @@ export default function PostDetailPage() {
           </form>
         </Card>
 
-        {relatedPosts.length > 0 && (
+        {(relatedLoading || relatedError || relatedChecked || relatedPosts.length > 0) && (
           <section>
             <div className="section-title-row">
               <h2 className="section-title">관련 게시글</h2>
               <AIBadge>RAG 추천</AIBadge>
             </div>
-            <div className="related-list">
-              {relatedPosts.map((related) => (
-                <article
-                  key={related.id}
-                  className="related-card"
-                  onClick={() => navigate(`/posts/${related.id}`)}
-                >
-                  <h3 style={{ color: 'var(--color-text)', fontSize: 14, lineHeight: 1.45, marginBottom: 4 }}>
-                    {related.title}
-                  </h3>
-                  <p style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{related.author}</p>
-                </article>
-              ))}
-            </div>
+            <p className="section-copy">현재 게시글 본문을 임베딩해 벡터 유사도가 높은 게시글을 보여줍니다.</p>
+
+            {relatedLoading && <div className="status-note">RAG 유사 게시글을 찾는 중입니다.</div>}
+            {relatedError && <ErrorMessage>{relatedError}</ErrorMessage>}
+            {!relatedLoading && !relatedError && relatedChecked && relatedPosts.length === 0 && (
+              <div className="status-note">아직 유사한 게시글을 찾지 못했습니다.</div>
+            )}
+            {relatedPosts.length > 0 && (
+              <div className="related-list">
+                {relatedPosts.map((related) => (
+                  <article
+                    key={related.id}
+                    className="related-card"
+                    onClick={() => navigate(`/posts/${related.id}`)}
+                  >
+                    <h3 className="related-card__title">{related.title}</h3>
+                    <p className="related-card__meta">{related.author}</p>
+                    <div className="related-card__reason">
+                      {related.similarity !== null && related.similarity !== undefined && (
+                        <span>벡터 유사도 {related.similarity}%</span>
+                      )}
+                      {related.matched_tags?.length > 0 ? (
+                        <span>공통 태그 {related.matched_tags.join(', ')}</span>
+                      ) : (
+                        <span>{related.reason || '본문 임베딩 기반 추천'}</span>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         )}
 

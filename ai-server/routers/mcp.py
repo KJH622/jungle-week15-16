@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 import httpx
 import os
+import time
 from dotenv import load_dotenv
 
 load_dotenv(encoding='utf-8')
@@ -9,6 +10,8 @@ router = APIRouter()
 
 # GitHub Personal Access Token — 없으면 시간당 60회, 있으면 5000회
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_CACHE_TTL_SECONDS = 600
+github_repo_cache = {}
 
 
 def parse_github_url(url: str):
@@ -31,6 +34,12 @@ async def get_github_repo(url: str):
     owner, repo = parse_github_url(url)
     if not owner or not repo:
         return {"error": "유효하지 않은 GitHub URL입니다."}
+
+    cache_key = f"{owner.lower()}/{repo.lower()}"
+    cached = github_repo_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached["saved_at"] < GITHUB_CACHE_TTL_SECONDS:
+        return {**cached["data"], "cached": True}
 
     # GitHub API 요청 헤더
     headers = {"Accept": "application/vnd.github+json"}
@@ -77,7 +86,7 @@ async def get_github_repo(url: str):
             if commits_data:
                 last_commit_at = commits_data[0]["commit"]["committer"]["date"]
 
-    return {
+    repo_info = {
         "name": data["name"],
         "full_name": data["full_name"],
         "description": data.get("description") or "",
@@ -89,4 +98,12 @@ async def get_github_repo(url: str):
         "html_url": data["html_url"],
         "updated_at": data["updated_at"],
         "last_commit_at": last_commit_at,
+        "cached": False,
     }
+
+    github_repo_cache[cache_key] = {
+        "saved_at": now,
+        "data": repo_info,
+    }
+
+    return repo_info
