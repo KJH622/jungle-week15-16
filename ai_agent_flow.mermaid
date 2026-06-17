@@ -1,0 +1,31 @@
+flowchart TD
+    Start(["사용자 질문 입력"])
+    Start --> Init["GPT-4o-mini 호출\n+ 도구 목록 전달"]
+
+    Init --> Decision{"finish_reason == tool_calls?"}
+
+    Decision -->|"아니오 (바로 답변 가능)"| Answer(["최종 답변 반환\n+ tools_used: []"])
+
+    Decision -->|"예 (도구 필요)"| WhichTool{"GPT가 선택한 도구?"}
+
+    WhichTool -->|"search_posts"| RAG["RAG 검색\nquery 벡터화 → ChromaDB\n유사 게시글 TOP 3 반환"]
+    WhichTool -->|"get_github_info"| GitHub["GitHub API 호출\nstars / forks / language\n최근 커밋 날짜 반환"]
+
+    RAG --> ToolResult["도구 실행 결과를\n대화 메시지에 추가"]
+    GitHub --> ToolResult
+
+    ToolResult --> Loop["GPT 재호출\n(결과 참고해서 판단)"]
+    Loop --> Decision
+
+    Decision -->|"아니오 (정보 충분)"| FinalAnswer(["최종 답변 반환\n+ tools_used: 사용된 도구 목록"])
+
+    style Start fill:#7c6af7,color:#fff,stroke:none
+    style Answer fill:#22a66a,color:#fff,stroke:none
+    style FinalAnswer fill:#22a66a,color:#fff,stroke:none
+    style RAG fill:#fff3e0,stroke:#e0900a,color:#7a4a00
+    style GitHub fill:#dbeeff,stroke:#4a9edd,color:#1a5f8a
+    style Decision fill:#f0f0f0,stroke:#aaa,color:#333
+    style WhichTool fill:#f0f0f0,stroke:#aaa,color:#333
+    style Init fill:#ede8fd,stroke:#7c6af7,color:#3d2d99
+    style Loop fill:#ede8fd,stroke:#7c6af7,color:#3d2d99
+    style ToolResult fill:#e6f9ef,stroke:#22a66a,color:#155a35
