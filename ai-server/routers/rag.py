@@ -67,6 +67,7 @@ def search_posts(request: SearchRequest):
     # 3. 검색된 게시글을 GPT 컨텍스트로 구성
     docs = results["documents"][0]
     metas = results["metadatas"][0]
+    ids = results["ids"][0]  # ChromaDB에 저장할 때 str(post.id)로 저장했으므로 다시 int로 변환
 
     context = ""
     for doc, meta in zip(docs, metas):
@@ -89,7 +90,10 @@ def search_posts(request: SearchRequest):
 
     return {
         "answer": response.choices[0].message.content,
-        "sources": [{"title": m["title"], "author": m["author"]} for m in metas]
+        "sources": [
+            {"id": int(post_id), "title": m["title"], "author": m["author"]}
+            for post_id, m in zip(ids, metas)
+        ]
     }
 
 @router.post("/embed/{post_id}")
