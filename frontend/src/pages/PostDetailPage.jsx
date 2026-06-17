@@ -60,10 +60,11 @@ export default function PostDetailPage() {
           .finally(() => setGithubLoading(false))
       }
 
-      if (postRes.data.content) {
+      if (postRes.data.title || postRes.data.content || postRes.data.tags?.length) {
         setRelatedLoading(true)
         aiApi.post('/rag/similar', {
-          content: postRes.data.content,
+          title: postRes.data.title || '',
+          content: postRes.data.content || '',
           exclude_id: postRes.data.id,
           tags: postRes.data.tags || [],
         })

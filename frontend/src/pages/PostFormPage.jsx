@@ -11,6 +11,89 @@ import TagChip from '../components/ui/TagChip'
 import Textarea from '../components/ui/Textarea'
 import TextInput from '../components/ui/TextInput'
 
+const KEYWORD_TAGS = [
+  ['React', ['react', '리액트']],
+  ['SpringBoot', ['spring', 'springboot', 'spring boot', '스프링']],
+  ['FastAPI', ['fastapi', 'fast api']],
+  ['PostgreSQL', ['postgresql', 'postgres', 'pgvector']],
+  ['Docker', ['docker', '도커']],
+  ['JWT', ['jwt']],
+  ['TypeScript', ['typescript']],
+  ['JavaScript', ['javascript']],
+  ['Python', ['python', '파이썬']],
+  ['Java', ['java', '자바']],
+  ['Next.js', ['next.js', 'nextjs']],
+  ['AI', ['ai', 'openai', '인공지능']],
+  ['RAG', ['rag', '임베딩', '벡터']],
+  ['GitHub', ['github', '깃허브']],
+  ['게시판', ['게시판', 'board', '커뮤니티']],
+  ['질문게시판', ['질문', 'qna', 'qa', 'q&a']],
+  ['검색', ['검색', 'search']],
+  ['알림', ['알림', 'notification', 'push']],
+  ['데이터시각화', ['데이터시각화', '시각화', 'chart', 'dashboard']],
+  ['가계부', ['가계부', 'budget', 'expense']],
+  ['날씨API', ['날씨', 'weather']],
+]
+
+const TAG_STOPWORDS = new Set([
+  '프로젝트',
+  '사이드',
+  '토이',
+  '서비스',
+  '기능',
+  '소개',
+  '사용',
+  '개발',
+  '만든',
+  '있는',
+  '하는',
+  '위한',
+  '관련',
+  '태그',
+  '추천',
+  'http',
+  'https',
+  'www',
+  'com',
+  'github.com',
+])
+
+const normalizeTagName = (value) => String(value || '').trim().replace(/^#/, '').slice(0, 30)
+const tagKey = (value) => normalizeTagName(value).toLowerCase()
+
+const buildLocalTagSuggestions = ({ title, content, githubUrl, existingTags }) => {
+  const text = `${title} ${content} ${githubUrl}`.toLowerCase()
+  const seen = new Set(existingTags.map(tagKey).filter(Boolean))
+  const suggestions = []
+
+  const add = (name) => {
+    const normalized = normalizeTagName(name)
+    const key = normalized.toLowerCase()
+    if (!normalized || seen.has(key)) return
+    seen.add(key)
+    suggestions.push({ name: normalized, source: 'local' })
+  }
+
+  KEYWORD_TAGS.forEach(([tag, keywords]) => {
+    if (keywords.some((keyword) => text.includes(keyword))) add(tag)
+  })
+
+  const tokens = text.match(/[0-9A-Za-z가-힣+#.]{2,}/g) || []
+  tokens.forEach((token) => {
+    const normalized = normalizeTagName(token)
+    if (!normalized || normalized.length > 20 || TAG_STOPWORDS.has(normalized.toLowerCase())) return
+    add(normalized)
+  })
+
+  if (title || content) {
+    add('웹서비스')
+    add('사이드프로젝트')
+    add('포트폴리오')
+  }
+
+  return suggestions.slice(0, 8)
+}
+
 export default function PostFormPage() {
   const { id } = useParams()
   const isEdit = Boolean(id)
@@ -30,6 +113,7 @@ export default function PostFormPage() {
   const [suggestedTags, setSuggestedTags] = useState([])
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const [suggestionError, setSuggestionError] = useState('')
+  const [suggestionInfo, setSuggestionInfo] = useState('')
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -111,10 +195,12 @@ export default function PostFormPage() {
     setLoadingSuggestions(true)
     setSuggestedTags([])
     setSuggestionError('')
+    setSuggestionInfo('')
 
     const title = form.title.trim()
     const content = form.content.trim()
     const githubUrl = form.githubUrl.trim()
+    const existingTags = form.tags.map(normalizeTagName).filter(Boolean)
 
     try {
       let ragTags = []
@@ -122,7 +208,11 @@ export default function PostFormPage() {
       let githubSeed = null
       if (title || content) {
         try {
-          const ragRes = await aiApi.post('/rag/suggest-tags', { title, content })
+          const ragRes = await aiApi.post('/rag/suggest-tags', {
+            title,
+            content,
+            existing_tags: existingTags,
+          })
           ragTags = ragRes.data.tags || []
         } catch {
           ragFailed = true
@@ -158,30 +248,44 @@ export default function PostFormPage() {
 
       if (githubSeed && (githubSeed.title || githubSeed.content)) {
         try {
-          const ragRes = await aiApi.post('/rag/suggest-tags', githubSeed)
+          const ragRes = await aiApi.post('/rag/suggest-tags', {
+            ...githubSeed,
+            existing_tags: existingTags,
+          })
           ragTags = [...ragTags, ...(ragRes.data.tags || [])]
         } catch {
           ragFailed = true
         }
       }
 
-      const addedNames = new Set()
-      const mergedTags = [
+      const addedNames = new Set(existingTags.map(tagKey).filter(Boolean))
+      let mergedTags = [
         ...githubTags,
         ...ragTags,
       ].filter((tag) => {
-        const name = tag.name?.trim()
-        if (!name || addedNames.has(name.toLowerCase()) || form.tags.includes(name)) return false
-        addedNames.add(name.toLowerCase())
+        const name = normalizeTagName(tag.name)
+        const key = name.toLowerCase()
+        if (!name || addedNames.has(key)) return false
+        addedNames.add(key)
+        tag.name = name
         return true
       })
 
+      if (mergedTags.length === 0) {
+        mergedTags = buildLocalTagSuggestions({
+          title,
+          content,
+          githubUrl,
+          existingTags,
+        })
+      }
+
       setSuggestedTags(mergedTags)
       if (mergedTags.length === 0) {
-        setSuggestionError(
+        setSuggestionInfo(
           ragFailed
-            ? 'RAG 태그 추천에 실패했습니다. 잠시 후 다시 시도해주세요.'
-            : '추천할 새 태그를 찾지 못했습니다. 제목이나 내용을 조금 더 구체적으로 입력해보세요.'
+            ? '외부 추천은 실패했지만, 현재 입력에서 새로 만들 수 있는 태그가 이미 모두 추가되어 있습니다.'
+            : '추천 가능한 태그가 이미 모두 추가되어 있습니다.'
         )
       }
     } catch (e) {
@@ -344,6 +448,7 @@ export default function PostFormPage() {
                   </div>
                 )}
                 {suggestionError && <ErrorMessage>{suggestionError}</ErrorMessage>}
+                {suggestionInfo && <div className="status-note">{suggestionInfo}</div>}
               </div>
             </div>
 
