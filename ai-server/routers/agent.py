@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from openai import OpenAI
+from mcp import ClientSession
+from mcp.client.sse import sse_client
 import chromadb
-import httpx
 import json
 import os
 from dotenv import load_dotenv
@@ -11,7 +12,9 @@ load_dotenv(encoding='utf-8')
 
 router = APIRouter()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+
+# MCP 서버 주소 — mcp_server.py가 여기서 실행 중이어야 함
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8002/sse")
 
 # rag.py와 동일한 ChromaDB 컬렉션 참조 (같은 벡터 저장소 공유)
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
@@ -20,6 +23,12 @@ collection = chroma_client.get_or_create_collection(name="posts")
 
 class AgentRequest(BaseModel):
     query: str  # 사용자 자연어 질문
+
+
+class ImproveRequest(BaseModel):
+    github_url: str   # 게시글의 GitHub 레포 URL
+    title: str        # 게시글 제목 (RAG 검색 키워드로 활용)
+    content: str      # 게시글 본문 (RAG 검색 키워드로 활용)
 
 
 # GPT에게 알려줄 도구 목록 — function calling 명세
@@ -97,44 +106,22 @@ def execute_search_posts(query: str) -> dict:
 
 
 async def execute_get_github_info(url: str) -> dict:
-    """GitHub API 호출 — 레포 기본 정보 + 최근 커밋 반환"""
-    parts = url.rstrip("/").split("/")
-    if len(parts) < 2:
-        return {"error": "유효하지 않은 GitHub URL"}
-
-    owner, repo = parts[-2], parts[-1]
-    headers = {"Accept": "application/vnd.github+json"}
-    if GITHUB_TOKEN:
-        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
-
-    async with httpx.AsyncClient() as http_client:
-        res = await http_client.get(
-            f"https://api.github.com/repos/{owner}/{repo}",
-            headers=headers, timeout=10.0
-        )
-        if res.status_code != 200:
-            return {"error": f"GitHub API 오류 (status: {res.status_code})"}
-
-        data = res.json()
-
-        # 최근 커밋 날짜 추가 조회
-        last_commit_at = None
-        commits_res = await http_client.get(
-            f"https://api.github.com/repos/{owner}/{repo}/commits?per_page=1",
-            headers=headers, timeout=10.0
-        )
-        if commits_res.status_code == 200 and commits_res.json():
-            last_commit_at = commits_res.json()[0]["commit"]["committer"]["date"]
-
-    return {
-        "name": data["name"],
-        "description": data.get("description") or "",
-        "stars": data["stargazers_count"],
-        "forks": data["forks_count"],
-        "language": data.get("language") or "Unknown",
-        "open_issues": data["open_issues_count"],
-        "last_commit_at": last_commit_at,
-    }
+    """
+    MCP 서버를 통해 GitHub 레포 기본 정보 조회.
+    내부적으로 mcp_server.py의 get_github_repo 도구를 SSE로 호출한다.
+    MCP 서버가 꺼져 있으면 {"error": "..."} 반환.
+    """
+    try:
+        async with sse_client(MCP_SERVER_URL) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool("get_github_repo", {"url": url})
+                if result.content:
+                    return json.loads(result.content[0].text)
+                return {"error": "MCP 서버 응답이 비어 있습니다."}
+    except Exception as e:
+        print(f"[MCP ERROR] {type(e).__name__}: {e}")
+        return {"error": f"MCP 서버 연결 실패: {str(e)}"}
 
 
 @router.post("/chat")
@@ -198,4 +185,69 @@ async def agent_chat(request: AgentRequest):
     return {
         "answer": choice.message.content,
         "tools_used": tools_used  # 어떤 도구를 사용했는지 프론트에 전달
+    }
+
+
+@router.post("/improve")
+async def improve_project(request: ImproveRequest):
+    """
+    프로젝트 개선 제안 Agent
+    - get_github_info: 현재 레포 상태 파악 (MCP 역할)
+    - search_posts: 유사하게 잘 된 프로젝트 사례 검색 (RAG 역할)
+    → 두 결과를 종합해 구체적인 개선 제안 생성
+    """
+    # 1단계: GitHub 레포 정보 수집 (MCP)
+    github_info = await execute_get_github_info(request.github_url)
+
+    # 2단계: 유사 프로젝트 검색 (RAG)
+    search_query = f"{request.title} {request.content[:200]}"
+    similar_posts = execute_search_posts(search_query)
+
+    # 3단계: 수집한 정보를 GPT 컨텍스트로 구성
+    github_summary = json.dumps(github_info, ensure_ascii=False, indent=2)
+
+    similar_summary = ""
+    for post in similar_posts["posts"]:
+        similar_summary += f"- [{post['title']}] {post['content'][:150]}\n"
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "당신은 사이드 프로젝트 개선 전문가입니다. "
+                "GitHub 레포 현황과 유사 프로젝트 사례를 바탕으로 "
+                "실행 가능한 개선 제안 3~5개를 아래 JSON 형식으로만 반환하세요. "
+                "다른 텍스트나 마크다운 없이 JSON 배열만 출력하세요.\n"
+                '[{"title": "제안 제목", "reason": "왜 필요한지 2~3문장", "how": "어떻게 하면 되는지 2~3문장"}]'
+            )
+        },
+        {
+            "role": "user",
+            "content": (
+                f"[분석할 프로젝트]\n"
+                f"제목: {request.title}\n"
+                f"내용: {request.content[:300]}\n\n"
+                f"[GitHub 레포 현황]\n{github_summary}\n\n"
+                f"[유사 프로젝트 사례]\n{similar_summary}\n\n"
+                "위 정보를 바탕으로 개선 제안 JSON 배열을 반환하세요."
+            )
+        }
+    ]
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+        response_format={"type": "json_object"}  # JSON 모드 강제
+    )
+
+    import re
+    raw = response.choices[0].message.content
+    # json_object 모드는 최상위가 객체여야 해서 {"suggestions": [...]} 형태로 올 수도 있음
+    parsed = json.loads(raw)
+    suggestions = parsed if isinstance(parsed, list) else parsed.get("suggestions", parsed.get("items", list(parsed.values())[0]))
+
+    return {
+        "suggestions": suggestions,
+        "github_info": github_info,
+        "similar_posts": similar_posts["posts"]
     }

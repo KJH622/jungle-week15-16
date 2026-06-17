@@ -144,6 +144,33 @@ public class PostService {
         return updated;
     }
 
+    // 프로젝트 개선 제안 — FastAPI /agent/improve 호출 후 결과 반환
+    @SuppressWarnings("unchecked")
+    public java.util.Map<String, Object> improveProject(Long id) {
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
+
+        // FastAPI에 보낼 요청 바디 구성
+        java.util.Map<String, String> body = new java.util.HashMap<>();
+        body.put("github_url", post.getGithubUrl() != null ? post.getGithubUrl() : "");
+        body.put("title", post.getTitle());
+        body.put("content", post.getContent());
+
+        try {
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            org.springframework.http.HttpEntity<java.util.Map<String, String>> entity =
+                    new org.springframework.http.HttpEntity<>(body, headers);
+
+            // FastAPI 응답을 Map으로 바로 역직렬화 → Spring이 JSON으로 재직렬화해서 React에 전달
+            org.springframework.http.ResponseEntity<java.util.Map> response = restTemplate.postForEntity(
+                    aiServerUrl + "/agent/improve", entity, java.util.Map.class);
+            return (java.util.Map<String, Object>) response.getBody();
+        } catch (Exception e) {
+            throw new RuntimeException("AI 개선 제안 실패: " + e.getMessage());
+        }
+    }
+
     // 게시글 삭제 — 작성자 본인 확인 후 영구 삭제, 반환값 없음(void)
     public void deletePost(Long id, String email) {
         Post post = postRepository.findById(id)
