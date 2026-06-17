@@ -67,6 +67,7 @@ export default function PostListPage() {
         <h1 style={styles.title}>사이드 프로젝트 게시판</h1>
         <div style={styles.headerRight}>
           <button style={styles.aiBtn} onClick={() => navigate('/search')}>AI 검색</button>
+          <button style={styles.agentBtn} onClick={() => navigate('/agent')}>AI 에이전트</button>
           <button style={styles.writeBtn} onClick={() => navigate('/posts/new')}>글 작성</button>
           <button style={styles.logoutBtn} onClick={handleLogout}>로그아웃</button>
         </div>
@@ -161,6 +162,7 @@ const styles = {
   title: { fontSize: '1.25rem', fontWeight: '700' },
   headerRight: { display: 'flex', gap: '0.5rem' },
   aiBtn: { padding: '0.5rem 1rem', background: '#7950f2', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' },
+  agentBtn: { padding: '0.5rem 1rem', background: '#f03e3e', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' },
   writeBtn: { padding: '0.5rem 1rem', background: '#339af0', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' },
   logoutBtn: { padding: '0.5rem 1rem', background: 'none', border: '1px solid #dee2e6', borderRadius: '6px', color: '#868e96' },
   searchBar: { display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' },

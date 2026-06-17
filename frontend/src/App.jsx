@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute'   // 인증 게이트�
 import PostDetailPage from './pages/PostDetailPage'        // 게시글 상세 화면
 import PostFormPage from './pages/PostFormPage'            // 게시글 작성/수정 화면
 import SearchPage from './pages/SearchPage'               // AI 자연어 검색 화면
+import AgentPage from './pages/AgentPage'                 // AI Agent 화면
 
 function App() {
   return (
@@ -63,6 +64,16 @@ function App() {
           element={
             <ProtectedRoute>
               <SearchPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* /agent → AI Agent (로그인 필수) */}
+        <Route
+          path="/agent"
+          element={
+            <ProtectedRoute>
+              <AgentPage />
             </ProtectedRoute>
           }
         />
