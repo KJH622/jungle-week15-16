@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 import httpx
 import os
 import time
 from dotenv import load_dotenv
+from auth import CurrentUser, require_user
 
 load_dotenv(encoding='utf-8')
 
@@ -26,7 +27,7 @@ def parse_github_url(url: str):
 
 
 @router.get("/github/repo")
-async def get_github_repo(url: str):
+async def get_github_repo(url: str, current_user: CurrentUser = Depends(require_user)):
     """
     GitHub URL을 받아 레포지토리 기본 정보 반환
     - url: 게시글에 저장된 github_url (e.g. https://github.com/user/repo)

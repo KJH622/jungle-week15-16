@@ -1,10 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from openai import OpenAI
 import chromadb
 import os
 from typing import List, Optional
 from dotenv import load_dotenv
+from auth import CurrentUser, require_user
 from database import get_posts, get_post_by_id
 
 load_dotenv(encoding='utf-8')
@@ -81,7 +82,7 @@ def embed_posts():
     return {"message": f"{len(posts)}개 게시글 임베딩 완료"}
 
 @router.post("/search")
-def search_posts(request: SearchRequest):
+def search_posts(request: SearchRequest, current_user: CurrentUser = Depends(require_user)):
     """자연어 질문으로 관련 게시글 검색 후 GPT 답변 생성"""
     # 1. 질문을 벡터로 변환
     query_embedding = get_embedding(request.query)
@@ -125,7 +126,7 @@ def search_posts(request: SearchRequest):
     }
 
 @router.post("/similar")
-def similar_posts(request: SimilarRequest):
+def similar_posts(request: SimilarRequest, current_user: CurrentUser = Depends(require_user)):
     """
     현재 게시글 본문을 기준으로 유사한 게시글 반환 (GPT 호출 없음)
     PostDetailPage 하단 '관련 게시글' 섹션에서 사용
@@ -167,7 +168,7 @@ def similar_posts(request: SimilarRequest):
 
 
 @router.post("/suggest-tags")
-def suggest_tags(request: SuggestTagsRequest):
+def suggest_tags(request: SuggestTagsRequest, current_user: CurrentUser = Depends(require_user)):
     """
     작성 중인 게시글 제목+내용 기반으로 유사 게시글의 태그 추천
     유사 게시글들의 태그 빈도를 계산해 많이 쓰인 순으로 반환

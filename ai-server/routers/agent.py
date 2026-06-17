@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from openai import OpenAI
 from mcp import ClientSession
@@ -7,6 +7,7 @@ import chromadb
 import json
 import os
 from dotenv import load_dotenv
+from auth import CurrentUser, require_user
 
 load_dotenv(encoding='utf-8')
 
@@ -125,7 +126,7 @@ async def execute_get_github_info(url: str) -> dict:
 
 
 @router.post("/chat")
-async def agent_chat(request: AgentRequest):
+async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(require_user)):
     """
     AI Agent — GPT가 질문을 보고 search_posts / get_github_info 중
     필요한 도구를 스스로 선택해 실행 후 최종 답변 생성
@@ -189,7 +190,7 @@ async def agent_chat(request: AgentRequest):
 
 
 @router.post("/improve")
-async def improve_project(request: ImproveRequest):
+async def improve_project(request: ImproveRequest, current_user: CurrentUser = Depends(require_user)):
     """
     프로젝트 개선 제안 Agent
     - get_github_info: 현재 레포 상태 파악 (MCP 역할)
