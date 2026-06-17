@@ -15,6 +15,8 @@ export default function PostDetailPage() {
   const [loading, setLoading] = useState(true)
   const [githubInfo, setGithubInfo] = useState(null)      // GitHub 레포 정보
   const [relatedPosts, setRelatedPosts] = useState([])    // 관련 게시글 추천
+  const [improving, setImproving] = useState(false)       // 개선 제안 로딩 중
+  const [improveResult, setImproveResult] = useState(null) // 개선 제안 결과
 
   // 현재 로그인한 유저 닉네임 (내 댓글인지 확인용)
   const myNickname = localStorage.getItem('nickname')
@@ -53,6 +55,20 @@ export default function PostDetailPage() {
       }
     }).catch(() => navigate('/posts')) // 없는 게시글이면 목록으로
   }, [id])
+
+  // 프로젝트 개선 제안 요청
+  const handleImprove = async () => {
+    setImproving(true)
+    setImproveResult(null)
+    try {
+      const res = await api.post(`/posts/${id}/improve`)
+      setImproveResult(res.data)  // Spring Boot가 Map → JSON으로 직렬화해서 반환
+    } catch (e) {
+      setImproveResult({ error: '개선 제안 요청에 실패했습니다.' })
+    } finally {
+      setImproving(false)
+    }
+  }
 
   // 게시글 삭제
   const handlePostDelete = async () => {
@@ -158,6 +174,64 @@ export default function PostDetailPage() {
           </>
         )}
         <p style={styles.content}>{post.content}</p>
+
+        {/* 개선 제안 버튼 — GitHub URL 있는 게시글에서만 표시 */}
+        {post.githubUrl && (
+          <div style={styles.improveSection}>
+            <button
+              style={improving ? styles.improveBtnLoading : styles.improveBtn}
+              onClick={handleImprove}
+              disabled={improving}
+            >
+              {improving ? '🤖 분석 중...' : '🤖 AI 개선 제안 받기'}
+            </button>
+          </div>
+        )}
+
+        {/* 개선 제안 결과 */}
+        {improveResult && (
+          <div style={styles.improveResult}>
+            {improveResult.error ? (
+              <p style={{ color: '#fa5252' }}>{improveResult.error}</p>
+            ) : (
+              <>
+                <h3 style={styles.improveTitle}>💡 AI 개선 제안</h3>
+                <div style={styles.improveCards}>
+                  {Array.isArray(improveResult.suggestions) && improveResult.suggestions.map((s, i) => (
+                    <div key={i} style={styles.improveCard}>
+                      <div style={styles.improveCardNum}>{i + 1}</div>
+                      <div style={styles.improveCardBody}>
+                        <p style={styles.improveCardTitle}>{s.title}</p>
+                        <div style={styles.improveCardRow}>
+                          <span style={styles.improveCardLabel}>왜</span>
+                          <span style={styles.improveCardText}>{s.reason}</span>
+                        </div>
+                        <div style={styles.improveCardRow}>
+                          <span style={{...styles.improveCardLabel, background: '#d3f9d8', color: '#2f9e44'}}>방법</span>
+                          <span style={styles.improveCardText}>{s.how}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {improveResult.similar_posts?.length > 0 && (
+                  <div style={styles.improveSources}>
+                    <p style={styles.improveSourceLabel}>참고한 유사 프로젝트</p>
+                    {improveResult.similar_posts.map((p) => (
+                      <span
+                        key={p.id}
+                        style={styles.improveSourceChip}
+                        onClick={() => navigate(`/posts/${p.id}`)}
+                      >
+                        {p.title}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 댓글 목록 */}
@@ -280,4 +354,47 @@ const styles = {
   },
   relatedPostTitle: { fontSize: '0.9rem', fontWeight: '500', color: '#212529', marginBottom: '0.2rem' },
   relatedPostMeta: { fontSize: '0.78rem', color: '#868e96', margin: 0 },
+  improveSection: { marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #f1f3f5' },
+  improveBtn: {
+    padding: '0.6rem 1.2rem', background: '#7950f2', color: '#fff',
+    border: 'none', borderRadius: '8px', fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer',
+  },
+  improveBtnLoading: {
+    padding: '0.6rem 1.2rem', background: '#adb5bd', color: '#fff',
+    border: 'none', borderRadius: '8px', fontWeight: '600', fontSize: '0.9rem', cursor: 'not-allowed',
+  },
+  improveResult: {
+    marginTop: '1rem', padding: '1.25rem 1.25rem 0.75rem',
+    background: '#f8f0ff', borderRadius: '10px', border: '1px solid #e9d8fd',
+  },
+  improveTitle: { fontSize: '0.95rem', fontWeight: '700', color: '#5f3dc4', marginBottom: '1rem' },
+  improveCards: { display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' },
+  improveCard: {
+    display: 'flex', gap: '0.875rem', background: '#fff',
+    borderRadius: '8px', padding: '0.875rem 1rem',
+    border: '1px solid #e9d8fd',
+  },
+  improveCardNum: {
+    minWidth: '24px', height: '24px', borderRadius: '50%',
+    background: '#7950f2', color: '#fff',
+    fontSize: '0.75rem', fontWeight: '700',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    marginTop: '2px', flexShrink: 0,
+  },
+  improveCardBody: { display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 },
+  improveCardTitle: { fontSize: '0.9rem', fontWeight: '700', color: '#212529', margin: 0 },
+  improveCardRow: { display: 'flex', gap: '0.5rem', alignItems: 'flex-start' },
+  improveCardLabel: {
+    fontSize: '0.7rem', fontWeight: '700', padding: '0.15rem 0.45rem',
+    borderRadius: '4px', background: '#e7f5ff', color: '#1971c2',
+    whiteSpace: 'nowrap', marginTop: '2px', flexShrink: 0,
+  },
+  improveCardText: { fontSize: '0.85rem', color: '#495057', lineHeight: '1.6', margin: 0 },
+  improveSources: { paddingTop: '0.75rem', borderTop: '1px solid #e9d8fd', paddingBottom: '0.5rem' },
+  improveSourceLabel: { fontSize: '0.78rem', color: '#868e96', marginBottom: '0.4rem' },
+  improveSourceChip: {
+    display: 'inline-block', marginRight: '0.4rem', marginBottom: '0.3rem',
+    padding: '0.2rem 0.6rem', background: '#ede9fe', color: '#5f3dc4',
+    borderRadius: '12px', fontSize: '0.78rem', cursor: 'pointer',
+  },
 }

@@ -85,7 +85,8 @@ async def get_github_repo(url: str):
         "forks": data["forks_count"],
         "open_issues": data["open_issues_count"],
         "language": data.get("language") or "Unknown",
+        "topics": data.get("topics") or [],  # 레포 소유자가 설정한 주제 태그 목록
         "html_url": data["html_url"],
         "updated_at": data["updated_at"],
-        "last_commit_at": last_commit_at,  # 실제 마지막 커밋 날짜
+        "last_commit_at": last_commit_at,
     }

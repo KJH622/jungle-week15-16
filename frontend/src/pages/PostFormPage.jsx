@@ -107,17 +107,42 @@ export default function PostFormPage() {
     }
   }
 
-  // AI 태그 추천 요청 — 제목+내용 기반으로 유사 게시글의 태그 분석
+  // AI 태그 추천 요청 — GitHub topics/language + RAG 유사 게시글 태그 합산
   const handleSuggestTags = async () => {
     if (!form.title.trim() && !form.content.trim()) return
     setLoadingSuggestions(true)
     setSuggestedTags([])
+
     try {
-      const res = await aiApi.post('/rag/suggest-tags', {
+      // RAG 태그 추천 (유사 게시글 빈도 기반)
+      const ragRes = await aiApi.post('/rag/suggest-tags', {
         title: form.title,
         content: form.content,
       })
-      setSuggestedTags(res.data.tags || [])
+      const ragTags = ragRes.data.tags || []  // [{ name, count }]
+
+      // GitHub topics + language (URL 있을 때만)
+      let githubTags = []
+      if (form.githubUrl.trim().startsWith('https://github.com/')) {
+        try {
+          const ghRes = await aiApi.get(`/mcp/github/repo?url=${encodeURIComponent(form.githubUrl)}`)
+          if (!ghRes.data.error) {
+            const topics = (ghRes.data.topics || []).map(t => ({ name: t, source: 'github' }))
+            const lang = ghRes.data.language && ghRes.data.language !== 'Unknown'
+              ? [{ name: ghRes.data.language, source: 'github' }]
+              : []
+            githubTags = [...topics, ...lang]
+          }
+        } catch (_) { /* GitHub 조회 실패해도 RAG 결과는 보여줌 */ }
+      }
+
+      // GitHub 태그를 앞에, RAG 태그를 뒤에 — 중복 제거
+      const githubNames = new Set(githubTags.map(t => t.name))
+      const merged = [
+        ...githubTags,
+        ...ragTags.filter(t => !githubNames.has(t.name)),
+      ]
+      setSuggestedTags(merged)
     } catch (e) {
       console.error('태그 추천 실패', e)
     } finally {
@@ -248,8 +273,9 @@ export default function PostFormPage() {
           {suggestedTags.length > 0 && (
             <div style={styles.suggestionsWrap}>
               <span style={styles.suggestionsLabel}>추천 태그:</span>
-              {suggestedTags.map(({ name }) => {
+              {suggestedTags.map(({ name, source }) => {
                 const alreadyAdded = form.tags.includes(name)
+                const isGithub = source === 'github'
                 return (
                   <button
                     key={name}
@@ -258,10 +284,11 @@ export default function PostFormPage() {
                     disabled={alreadyAdded}
                     style={{
                       ...styles.suggestionChip,
+                      ...(isGithub ? styles.suggestionChipGithub : {}),
                       ...(alreadyAdded ? styles.suggestionChipAdded : {}),
                     }}
                   >
-                    {alreadyAdded ? `✓ ${name}` : `+ ${name}`}
+                    {alreadyAdded ? `✓ ${name}` : isGithub ? `🐙 ${name}` : `+ ${name}`}
                   </button>
                 )
               })}
@@ -313,6 +340,9 @@ const styles = {
     padding: '4px 12px', fontSize: 12, borderRadius: 20,
     border: '1px solid #7950f2', background: '#f3f0ff', color: '#7950f2',
     cursor: 'pointer',
+  },
+  suggestionChipGithub: {
+    border: '1px solid #4a9edd', background: '#e8f4fd', color: '#1a5f8a',
   },
   suggestionChipAdded: {
     border: '1px solid #dee2e6', background: '#f8f9fa', color: '#adb5bd',
