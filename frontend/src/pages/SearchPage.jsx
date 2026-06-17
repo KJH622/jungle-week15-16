@@ -53,11 +53,11 @@ export default function SearchPage() {
 
         <header className="page-header">
           <div className="page-title-row">
-            <h1 className="page-title">RAG 프로젝트 검색</h1>
-            <AIBadge>RAG 검색</AIBadge>
+            <h1 className="page-title">관련 프로젝트 검색</h1>
+            <AIBadge>관련 프로젝트 검색</AIBadge>
           </div>
           <p className="page-subtitle">
-            자연어로 질문하면 게시글 내용을 바탕으로 답변하고 참고 게시글을 보여줍니다.
+            자연어로 질문하면 게시글 내용을 바탕으로 관련 프로젝트를 찾아줍니다.
           </p>
         </header>
 
@@ -86,7 +86,7 @@ export default function SearchPage() {
 
         {loading && (
           <div style={{ marginBottom: 14 }}>
-            <LoadingIndicator ai>게시글을 분석하는 중입니다...</LoadingIndicator>
+            <LoadingIndicator ai>관련 프로젝트를 찾는 중입니다...</LoadingIndicator>
           </div>
         )}
 

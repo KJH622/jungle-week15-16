@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Optional
 
@@ -20,7 +21,10 @@ from usage_log import log_openai_usage
 load_dotenv(encoding="utf-8")
 
 router = APIRouter()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
+)
 
 
 class SearchRequest(BaseModel):
@@ -53,6 +57,61 @@ def distance_to_similarity(distance) -> Optional[int]:
         return None
     score = max(0.0, 1.0 - float(distance))
     return round(score * 100)
+
+
+def normalize_tag_name(value) -> str:
+    return str(value or "").strip().lstrip("#")[:30]
+
+
+def generate_tags_from_content(title: str, content: str, current_user: CurrentUser) -> list[dict]:
+    source_text = f"제목: {title}\n내용: {content[:1000]}".strip()
+    if not source_text:
+        return []
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "당신은 사이드 프로젝트 게시글의 태그 추천 도우미입니다. "
+                    "게시글 제목과 내용을 보고 검색과 분류에 도움이 되는 태그를 3개에서 8개까지 추천하세요. "
+                    "반드시 JSON만 반환하고, 형태는 {\"tags\":[\"태그1\",\"태그2\"]} 입니다. "
+                    "태그는 짧게 쓰고, 기술명이나 라이브러리명은 원래 표기를 유지하세요."
+                ),
+            },
+            {"role": "user", "content": source_text},
+        ],
+    )
+    log_openai_usage(
+        "rag_suggest_tags_fallback",
+        current_user.email,
+        response,
+        {"operation": "tag_generation"},
+    )
+
+    try:
+        parsed = json.loads(response.choices[0].message.content)
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+    raw_tags = parsed.get("tags", [])
+    if not isinstance(raw_tags, list):
+        return []
+
+    tags = []
+    seen = set()
+    for item in raw_tags:
+        name = normalize_tag_name(item.get("name") if isinstance(item, dict) else item)
+        key = name.lower()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        tags.append({"name": name, "count": 1, "source": "ai"})
+        if len(tags) == 8:
+            break
+    return tags
 
 
 @router.post("/embed")
@@ -146,9 +205,18 @@ def similar_posts(request: SimilarRequest, current_user: CurrentUser = Depends(r
 @router.post("/suggest-tags")
 def suggest_tags(request: SuggestTagsRequest, current_user: CurrentUser = Depends(require_user)):
     check_rate_limit(current_user, "rag_suggest_tags")
-    query_text = f"{request.title} {request.content[:300]}"
-    query_embedding = get_embedding(query_text, "rag_suggest_tags", current_user.email)
-    posts = search_post_embeddings(query_embedding, limit=5)
+    title = request.title.strip()
+    content = request.content.strip()
+    query_text = f"{title} {content[:300]}".strip()
+    if not query_text:
+        return {"tags": []}
+
+    posts = []
+    try:
+        query_embedding = get_embedding(query_text, "rag_suggest_tags", current_user.email)
+        posts = search_post_embeddings(query_embedding, limit=5)
+    except Exception as e:
+        print(f"[RAG TAG SUGGESTION FALLBACK] {type(e).__name__}: {e}", flush=True)
 
     tag_counts: dict[str, int] = {}
     for post in posts:
@@ -158,7 +226,10 @@ def suggest_tags(request: SuggestTagsRequest, current_user: CurrentUser = Depend
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
     sorted_tags = sorted(tag_counts.items(), key=lambda item: item[1], reverse=True)
-    return {"tags": [{"name": name, "count": count} for name, count in sorted_tags[:8]]}
+    if sorted_tags:
+        return {"tags": [{"name": name, "count": count, "source": "rag"} for name, count in sorted_tags[:8]]}
+
+    return {"tags": generate_tags_from_content(title, content, current_user)}
 
 
 @router.post("/embed/{post_id}")
