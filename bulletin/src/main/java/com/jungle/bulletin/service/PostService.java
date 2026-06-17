@@ -10,10 +10,12 @@ import com.jungle.bulletin.entity.Tag;
 import com.jungle.bulletin.repository.TagRepository;
 import com.jungle.bulletin.repository.CategoryRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,6 +28,10 @@ public class PostService {
     private final UserRepository userRepository;
     private final TagRepository tagRepository;
     private final CategoryRepository categoryRepository;
+    private final RestTemplate restTemplate;  // 외부 HTTP 요청 도구 (FastAPI 호출용)
+
+    @Value("${ai.server.url}")  // application.properties의 ai.server.url 값 주입
+    private String aiServerUrl;
 
     // 검색 + 카테고리 필터 + 페이징 — 조건 없으면 전체 조회
     public Page<PostResponse> getAllPosts(String keyword, Long domainId, Long projectTypeId, int page, int size) {
@@ -77,7 +83,16 @@ public class PostService {
         post.setGithubUrl(request.getGithubUrl());
 
         // save()는 id가 없으면 INSERT, 있으면 UPDATE 자동 판단
-        return new PostResponse(postRepository.save(post));
+        PostResponse saved = new PostResponse(postRepository.save(post));
+
+        // FastAPI에 벡터 저장 요청 — 실패해도 게시글 저장은 정상 완료
+        try {
+            restTemplate.postForEntity(aiServerUrl + "/rag/embed/" + saved.getId(), null, String.class);
+        } catch (Exception e) {
+            System.out.println("[AI 연동 실패] 게시글 임베딩 오류: " + e.getMessage());
+        }
+
+        return saved;
     }
 
     // 게시글 수정 — 게시글 존재 확인 → 작성자 본인 확인 → 수정
@@ -117,7 +132,16 @@ public class PostService {
         // GitHub URL 저장
         post.setGithubUrl(request.getGithubUrl());
 
-        return new PostResponse(postRepository.save(post));
+        PostResponse updated = new PostResponse(postRepository.save(post));
+
+        // FastAPI에 벡터 갱신 요청 — upsert이므로 기존 벡터 덮어쓰기
+        try {
+            restTemplate.postForEntity(aiServerUrl + "/rag/embed/" + updated.getId(), null, String.class);
+        } catch (Exception e) {
+            System.out.println("[AI 연동 실패] 게시글 임베딩 오류: " + e.getMessage());
+        }
+
+        return updated;
     }
 
     // 게시글 삭제 — 작성자 본인 확인 후 영구 삭제, 반환값 없음(void)
@@ -131,5 +155,12 @@ public class PostService {
         }
 
         postRepository.deleteById(id);
+
+        // FastAPI에 벡터 삭제 요청 — ChromaDB에서도 해당 게시글 벡터 제거
+        try {
+            restTemplate.delete(aiServerUrl + "/rag/embed/" + id);
+        } catch (Exception e) {
+            System.out.println("[AI 연동 실패] 벡터 삭제 오류: " + e.getMessage());
+        }
     }
 }

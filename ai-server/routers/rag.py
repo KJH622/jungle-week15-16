@@ -4,7 +4,7 @@ from openai import OpenAI
 import chromadb
 import os
 from dotenv import load_dotenv
-from database import get_posts
+from database import get_posts, get_post_by_id
 
 load_dotenv(encoding='utf-8')
 
@@ -91,3 +91,32 @@ def search_posts(request: SearchRequest):
         "answer": response.choices[0].message.content,
         "sources": [{"title": m["title"], "author": m["author"]} for m in metas]
     }
+
+@router.post("/embed/{post_id}")
+def embed_post(post_id: int):
+    """특정 게시글 단건 벡터화 — Spring Boot가 게시글 저장 후 자동 호출"""
+    post = get_post_by_id(post_id)
+    if not post:
+        return {"message": f"게시글 {post_id}을 찾을 수 없습니다."}
+
+    text = f"{post['title']} {post['content']}"
+    embedding = get_embedding(text)
+
+    # ChromaDB에 저장 (이미 있으면 덮어쓰기 → 수정 시도 동일하게 처리)
+    collection.upsert(
+        ids=[str(post["id"])],
+        embeddings=[embedding],
+        documents=[text],
+        metadatas=[{
+            "title": post["title"],
+            "author": post["author"],
+            "github_url": post["github_url"] or "",
+        }]
+    )
+    return {"message": f"게시글 {post_id} 임베딩 완료"}
+
+@router.delete("/embed/{post_id}")
+def delete_embed(post_id: int):
+    """ChromaDB에서 특정 게시글 벡터 삭제 — Spring Boot가 게시글 삭제 후 자동 호출"""
+    collection.delete(ids=[str(post_id)])
+    return {"message": f"게시글 {post_id} 벡터 삭제 완료"}
