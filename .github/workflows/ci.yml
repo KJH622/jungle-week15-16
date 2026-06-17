@@ -70,6 +70,9 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       - name: Create test application.properties
         run: |
           cat > src/main/resources/application.properties <<'EOF'

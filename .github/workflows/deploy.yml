@@ -88,4 +88,4 @@ jobs:
             docker compose --env-file .env.production up -d --build
             docker image prune -f
             rm -f /tmp/jungle-week15-16.tar.gz
-REMOTE
+          REMOTE
