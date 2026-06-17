@@ -73,8 +73,13 @@ jobs:
               exit 1
             fi
 
+            DOCKER="docker"
+            if ! docker ps >/dev/null 2>&1; then
+              DOCKER="sudo docker"
+            fi
+
             if [ -f "$EC2_APP_DIR/current/docker-compose.yml" ]; then
-              docker compose --env-file "$EC2_APP_DIR/.env.production" -f "$EC2_APP_DIR/current/docker-compose.yml" down --remove-orphans || true
+              $DOCKER compose --env-file "$EC2_APP_DIR/.env.production" -f "$EC2_APP_DIR/current/docker-compose.yml" down --remove-orphans || true
             fi
 
             rm -rf "$EC2_APP_DIR/.previous"
@@ -85,7 +90,7 @@ jobs:
             cp "$EC2_APP_DIR/current/.env.production" "$EC2_APP_DIR/.env.production"
 
             cd "$EC2_APP_DIR/current"
-            docker compose --env-file .env.production up -d --build
-            docker image prune -f
+            $DOCKER compose --env-file .env.production up -d --build
+            $DOCKER image prune -f
             rm -f /tmp/jungle-week15-16.tar.gz
           REMOTE
