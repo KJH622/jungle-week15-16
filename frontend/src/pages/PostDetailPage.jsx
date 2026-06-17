@@ -13,7 +13,8 @@ export default function PostDetailPage() {
   const [editingId, setEditingId] = useState(null)       // 수정 중인 댓글 ID
   const [editInput, setEditInput] = useState('')         // 수정 입력값
   const [loading, setLoading] = useState(true)
-  const [githubInfo, setGithubInfo] = useState(null)   // GitHub 레포 정보
+  const [githubInfo, setGithubInfo] = useState(null)      // GitHub 레포 정보
+  const [relatedPosts, setRelatedPosts] = useState([])    // 관련 게시글 추천
 
   // 현재 로그인한 유저 닉네임 (내 댓글인지 확인용)
   const myNickname = localStorage.getItem('nickname')
@@ -35,6 +36,20 @@ export default function PostDetailPage() {
             if (!res.data.error) setGithubInfo(res.data)
           })
           .catch(() => {}) // GitHub 조회 실패해도 게시글은 정상 표시
+      }
+
+      // 본문 기반 유사 게시글 추천 (GPT 없이 벡터 검색만)
+      if (postRes.data.content) {
+        aiApi.post('/rag/similar', {
+          content: postRes.data.content,
+          exclude_id: postRes.data.id,
+        })
+          .then((res) => {
+            if (res.data.posts && res.data.posts.length > 0) {
+              setRelatedPosts(res.data.posts)
+            }
+          })
+          .catch(() => {}) // 추천 실패해도 게시글은 정상 표시
       }
     }).catch(() => navigate('/posts')) // 없는 게시글이면 목록으로
   }, [id])
@@ -191,6 +206,25 @@ export default function PostDetailPage() {
         />
         <button style={styles.submitBtn} type="submit">등록</button>
       </form>
+
+      {/* 관련 게시글 추천 — RAG 벡터 검색 결과 */}
+      {relatedPosts.length > 0 && (
+        <div style={styles.relatedSection}>
+          <h2 style={styles.relatedTitle}>🔍 관련 게시글</h2>
+          <div style={styles.relatedList}>
+            {relatedPosts.map((p) => (
+              <div
+                key={p.id}
+                style={styles.relatedCard}
+                onClick={() => navigate(`/posts/${p.id}`)}
+              >
+                <p style={styles.relatedPostTitle}>{p.title}</p>
+                <p style={styles.relatedPostMeta}>{p.author}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -236,4 +270,14 @@ const styles = {
   githubStats: { display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' },
   stat: { fontSize: '0.85rem', color: '#343a40' },
   statMuted: { fontSize: '0.8rem', color: '#868e96', marginLeft: 'auto' },
+  relatedSection: { marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #f1f3f5' },
+  relatedTitle: { fontSize: '1rem', fontWeight: '600', marginBottom: '0.75rem', color: '#495057' },
+  relatedList: { display: 'flex', flexDirection: 'column', gap: '0.5rem' },
+  relatedCard: {
+    background: '#fff', borderRadius: '8px', padding: '0.85rem 1rem',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)', cursor: 'pointer',
+    borderLeft: '3px solid #7950f2',
+  },
+  relatedPostTitle: { fontSize: '0.9rem', fontWeight: '500', color: '#212529', marginBottom: '0.2rem' },
+  relatedPostMeta: { fontSize: '0.78rem', color: '#868e96', margin: 0 },
 }

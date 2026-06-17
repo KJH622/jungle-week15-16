@@ -18,6 +18,14 @@ collection = chroma_client.get_or_create_collection(name="posts")
 class SearchRequest(BaseModel):
     query: str  # 사용자가 입력한 자연어 질문
 
+class SimilarRequest(BaseModel):
+    content: str     # 현재 게시글 본문
+    exclude_id: int  # 현재 게시글 ID (결과에서 제외)
+
+class SuggestTagsRequest(BaseModel):
+    title: str    # 작성 중인 게시글 제목
+    content: str  # 작성 중인 게시글 본문
+
 def get_embedding(text: str) -> list:
     """텍스트를 벡터(숫자 배열)로 변환"""
     response = client.embeddings.create(
@@ -38,6 +46,9 @@ def embed_posts():
         text = f"{post['title']} {post['content']}"
         embedding = get_embedding(text)
 
+        # 태그 리스트 → 쉼표 구분 문자열 (ChromaDB 메타데이터는 str/int/float만 지원)
+        tags_str = ",".join(post.get("tags", []))
+
         # ChromaDB에 저장 (이미 있으면 덮어쓰기)
         collection.upsert(
             ids=[str(post["id"])],
@@ -47,6 +58,7 @@ def embed_posts():
                 "title": post["title"],
                 "author": post["author"],
                 "github_url": post["github_url"] or "",
+                "tags": tags_str,
             }]
         )
 
@@ -96,6 +108,71 @@ def search_posts(request: SearchRequest):
         ]
     }
 
+@router.post("/similar")
+def similar_posts(request: SimilarRequest):
+    """
+    현재 게시글 본문을 기준으로 유사한 게시글 반환 (GPT 호출 없음)
+    PostDetailPage 하단 '관련 게시글' 섹션에서 사용
+    """
+    # 본문이 너무 길면 앞 500자만 사용 (임베딩 비용 절감)
+    query_text = request.content[:500]
+    query_embedding = get_embedding(query_text)
+
+    # 현재 게시글 제외를 위해 여유있게 5개 조회
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=5
+    )
+
+    posts = []
+    for post_id, meta in zip(results["ids"][0], results["metadatas"][0]):
+        # 현재 게시글은 결과에서 제외
+        if int(post_id) == request.exclude_id:
+            continue
+        posts.append({
+            "id": int(post_id),
+            "title": meta["title"],
+            "author": meta["author"],
+        })
+        if len(posts) == 3:  # 최대 3개만 반환
+            break
+
+    return {"posts": posts}
+
+
+@router.post("/suggest-tags")
+def suggest_tags(request: SuggestTagsRequest):
+    """
+    작성 중인 게시글 제목+내용 기반으로 유사 게시글의 태그 추천
+    유사 게시글들의 태그 빈도를 계산해 많이 쓰인 순으로 반환
+    """
+    query_text = f"{request.title} {request.content[:300]}"
+    query_embedding = get_embedding(query_text)
+
+    # 유사 게시글 5개 조회 (태그 수집용)
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=5
+    )
+
+    # 유사 게시글들의 태그 빈도 계산
+    tag_counts: dict[str, int] = {}
+    for meta in results["metadatas"][0]:
+        tags_str = meta.get("tags", "")
+        if not tags_str:
+            continue
+        for tag in tags_str.split(","):
+            tag = tag.strip()
+            if tag:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+    # 빈도 높은 순으로 정렬, 최대 8개 반환
+    sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
+    return {
+        "tags": [{"name": name, "count": count} for name, count in sorted_tags[:8]]
+    }
+
+
 @router.post("/embed/{post_id}")
 def embed_post(post_id: int):
     """특정 게시글 단건 벡터화 — Spring Boot가 게시글 저장 후 자동 호출"""
@@ -106,6 +183,8 @@ def embed_post(post_id: int):
     text = f"{post['title']} {post['content']}"
     embedding = get_embedding(text)
 
+    tags_str = ",".join(post.get("tags", []))
+
     # ChromaDB에 저장 (이미 있으면 덮어쓰기 → 수정 시도 동일하게 처리)
     collection.upsert(
         ids=[str(post["id"])],
@@ -115,6 +194,7 @@ def embed_post(post_id: int):
             "title": post["title"],
             "author": post["author"],
             "github_url": post["github_url"] or "",
+            "tags": tags_str,
         }]
     )
     return {"message": f"게시글 {post_id} 임베딩 완료"}

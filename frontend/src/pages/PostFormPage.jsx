@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/axios'
+import aiApi from '../api/aiApi'
 
 export default function PostFormPage() {
   const { id } = useParams()            // id 있으면 수정 모드, 없으면 작성 모드
@@ -21,6 +22,10 @@ export default function PostFormPage() {
   // 카테고리 목록
   const [domains, setDomains] = useState([])
   const [projectTypes, setProjectTypes] = useState([])
+
+  // 태그 추천 상태
+  const [suggestedTags, setSuggestedTags] = useState([])   // 추천된 태그 목록
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
 
   useEffect(() => {
     // 카테고리 목록 불러오기
@@ -93,6 +98,31 @@ export default function PostFormPage() {
   // 태그 삭제
   const removeTag = (tagToRemove) => {
     setForm(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tagToRemove) }))
+  }
+
+  // 추천 태그 클릭 → 태그 목록에 추가 (중복 제외)
+  const addSuggestedTag = (tagName) => {
+    if (!form.tags.includes(tagName)) {
+      setForm(prev => ({ ...prev, tags: [...prev.tags, tagName] }))
+    }
+  }
+
+  // AI 태그 추천 요청 — 제목+내용 기반으로 유사 게시글의 태그 분석
+  const handleSuggestTags = async () => {
+    if (!form.title.trim() && !form.content.trim()) return
+    setLoadingSuggestions(true)
+    setSuggestedTags([])
+    try {
+      const res = await aiApi.post('/rag/suggest-tags', {
+        title: form.title,
+        content: form.content,
+      })
+      setSuggestedTags(res.data.tags || [])
+    } catch (e) {
+      console.error('태그 추천 실패', e)
+    } finally {
+      setLoadingSuggestions(false)
+    }
   }
 
   // 폼 제출
@@ -184,7 +214,19 @@ export default function PostFormPage() {
 
         {/* 태그 */}
         <div style={styles.field}>
-          <label>태그 (엔터로 추가)</label>
+          <div style={styles.tagLabelRow}>
+            <label>태그 (엔터로 추가)</label>
+            {/* AI 태그 추천 버튼 — 제목/내용 입력 후 클릭 */}
+            <button
+              type="button"
+              onClick={handleSuggestTags}
+              disabled={loadingSuggestions || (!form.title.trim() && !form.content.trim())}
+              style={styles.suggestBtn}
+            >
+              {loadingSuggestions ? '분석 중...' : '✨ AI 태그 추천'}
+            </button>
+          </div>
+
           <div style={styles.tagBox}>
             {form.tags.map(tag => (
               <span key={tag} style={styles.tag}>
@@ -201,6 +243,30 @@ export default function PostFormPage() {
               placeholder="태그 입력 후 엔터"
             />
           </div>
+
+          {/* 추천 태그 칩 — 클릭하면 태그에 추가 */}
+          {suggestedTags.length > 0 && (
+            <div style={styles.suggestionsWrap}>
+              <span style={styles.suggestionsLabel}>추천 태그:</span>
+              {suggestedTags.map(({ name }) => {
+                const alreadyAdded = form.tags.includes(name)
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => addSuggestedTag(name)}
+                    disabled={alreadyAdded}
+                    style={{
+                      ...styles.suggestionChip,
+                      ...(alreadyAdded ? styles.suggestionChipAdded : {}),
+                    }}
+                  >
+                    {alreadyAdded ? `✓ ${name}` : `+ ${name}`}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* 버튼 */}
@@ -235,4 +301,21 @@ const styles = {
   buttons: { display: 'flex', gap: 12, justifyContent: 'flex-end' },
   cancelBtn: { padding: '10px 24px', borderRadius: 6, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 15 },
   submitBtn: { padding: '10px 24px', borderRadius: 6, border: 'none', background: '#1a56db', color: '#fff', cursor: 'pointer', fontSize: 15 },
+  tagLabelRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  suggestBtn: {
+    padding: '4px 12px', fontSize: 12, borderRadius: 20,
+    border: '1px solid #7950f2', background: '#fff', color: '#7950f2',
+    cursor: 'pointer',
+  },
+  suggestionsWrap: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 6 },
+  suggestionsLabel: { fontSize: 12, color: '#868e96' },
+  suggestionChip: {
+    padding: '4px 12px', fontSize: 12, borderRadius: 20,
+    border: '1px solid #7950f2', background: '#f3f0ff', color: '#7950f2',
+    cursor: 'pointer',
+  },
+  suggestionChipAdded: {
+    border: '1px solid #dee2e6', background: '#f8f9fa', color: '#adb5bd',
+    cursor: 'default',
+  },
 }
