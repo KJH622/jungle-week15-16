@@ -1,2 +1,26 @@
 docs/
 bulletin/src/main/resources/application.properties
+
+# 보안 — 절대 커밋 금지
+.env
+
+# Python 컴파일 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# ChromaDB 로컬 벡터 DB (재생성 가능, 용량 큼)
+chroma_db/
+
+# 가상환경 (있을 경우)
+.venv/
+venv/
+
+# 빌드/테스트 캐시
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# OS 시스템 파일
+.DS_Store
+Thumbs.db
