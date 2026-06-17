@@ -1,7 +1,8 @@
 # MCP & AI Server 테스트 스크립트
 # PowerShell에서 실행: .\test_mcp.ps1
 
-$base_ai   = "http://localhost:8000"
+$base_gateway = "http://localhost:8088"
+$base_ai   = "$base_gateway/ai"
 $base_mcp  = "http://localhost:8002"
 $jwt_token = $env:JWT_TOKEN
 
@@ -33,14 +34,14 @@ function Test-Endpoint {
 }
 
 Write-Host "========================================" -ForegroundColor Yellow
-Write-Host " MCP / AI Server 통합 테스트" -ForegroundColor Yellow
+Write-Host " Nginx Gateway / MCP / AI Server 통합 테스트" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Yellow
 if (-not $jwt_token) {
     Write-Host " JWT_TOKEN이 없어 인증이 필요한 AI API 테스트는 SKIP됩니다." -ForegroundColor Yellow
 }
 
 # 1. AI Server health check
-Test-Endpoint "AI Server Health" "$base_ai/"
+Test-Endpoint "AI Server Health (Gateway)" "$base_ai/"
 
 # 2. MCP Server SSE endpoint (GET — 연결 확인만)
 Write-Host "`n[MCP Server SSE]" -ForegroundColor Cyan
