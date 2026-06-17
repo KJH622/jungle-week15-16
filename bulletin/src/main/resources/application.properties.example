@@ -10,3 +10,14 @@ spring.datasource.driver-class-name=org.postgresql.Driver
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+
+# JWT 설정
+jwt.secret=여기에_충분히_긴_JWT_시크릿_입력
+jwt.expiration=86400000
+
+# JPA 테이블 생성 후 data.sql 실행 여부
+spring.jpa.defer-datasource-initialization=true
+spring.sql.init.mode=never
+
+# AI 서버 URL — FastAPI (RAG, GitHub API, Agent)
+ai.server.url=http://localhost:8000
