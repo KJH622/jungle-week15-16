@@ -22,6 +22,7 @@ client = OpenAI(
     timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
 )
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8002/sse")
+MCP_SERVER_HOST_HEADER = os.getenv("MCP_SERVER_HOST_HEADER", "localhost:8002")
 MAX_AGENT_TOOL_ROUNDS = int(os.getenv("MAX_AGENT_TOOL_ROUNDS", "3"))
 MAX_AGENT_TOOL_CALLS = int(os.getenv("MAX_AGENT_TOOL_CALLS", "6"))
 MCP_TIMEOUT_SECONDS = float(os.getenv("MCP_TIMEOUT_SECONDS", "15"))
@@ -112,7 +113,10 @@ def execute_search_posts(query: str, current_user: CurrentUser | None = None) ->
 
 async def execute_get_github_info(url: str) -> dict:
     async def call_mcp() -> dict:
-        async with sse_client(MCP_SERVER_URL) as (read, write):
+        async with sse_client(
+            MCP_SERVER_URL,
+            headers={"Host": MCP_SERVER_HOST_HEADER},
+        ) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 result = await session.call_tool("get_github_repo", {"url": url})
