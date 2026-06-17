@@ -1,5 +1,6 @@
 import json
 import os
+import asyncio
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends
@@ -14,8 +15,14 @@ from database import search_post_embeddings
 load_dotenv(encoding="utf-8")
 
 router = APIRouter()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
+)
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8002/sse")
+MAX_AGENT_TOOL_ROUNDS = int(os.getenv("MAX_AGENT_TOOL_ROUNDS", "3"))
+MAX_AGENT_TOOL_CALLS = int(os.getenv("MAX_AGENT_TOOL_CALLS", "6"))
+MCP_TIMEOUT_SECONDS = float(os.getenv("MCP_TIMEOUT_SECONDS", "15"))
 
 
 class AgentRequest(BaseModel):
@@ -99,7 +106,7 @@ def execute_search_posts(query: str) -> dict:
 
 
 async def execute_get_github_info(url: str) -> dict:
-    try:
+    async def call_mcp() -> dict:
         async with sse_client(MCP_SERVER_URL) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -107,6 +114,11 @@ async def execute_get_github_info(url: str) -> dict:
                 if result.content:
                     return json.loads(result.content[0].text)
                 return {"error": "MCP server returned an empty response."}
+
+    try:
+        return await asyncio.wait_for(call_mcp(), timeout=MCP_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        return {"error": f"MCP server timed out after {MCP_TIMEOUT_SECONDS} seconds."}
     except Exception as e:
         print(f"[MCP ERROR] {type(e).__name__}: {e}")
         return {"error": f"MCP server connection failed: {str(e)}"}
@@ -128,7 +140,9 @@ async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(
 
     tools_used = []
 
-    while True:
+    choice = None
+
+    for _ in range(MAX_AGENT_TOOL_ROUNDS):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
@@ -138,11 +152,27 @@ async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(
 
         choice = response.choices[0]
         if choice.finish_reason != "tool_calls":
-            break
+            return {
+                "answer": choice.message.content,
+                "tools_used": tools_used,
+            }
 
         messages.append(choice.message)
+        tool_calls = choice.message.tool_calls or []
 
-        for tool_call in choice.message.tool_calls:
+        if len(tools_used) + len(tool_calls) > MAX_AGENT_TOOL_CALLS:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "Tool call limit reached. Stop calling tools and provide "
+                        "the best possible answer using the information already gathered."
+                    ),
+                }
+            )
+            break
+
+        for tool_call in tool_calls:
             name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
             tools_used.append(name)
@@ -162,6 +192,20 @@ async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(
                 }
             )
 
+    final_response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            *messages,
+            {
+                "role": "system",
+                "content": (
+                    "Stop using tools now. Provide a concise final answer based on "
+                    "the conversation and any tool results already available."
+                ),
+            },
+        ],
+    )
+    choice = final_response.choices[0]
     return {
         "answer": choice.message.content,
         "tools_used": tools_used,
