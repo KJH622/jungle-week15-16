@@ -1,7 +1,7 @@
 # MCP & AI Server 테스트 스크립트
 # PowerShell에서 실행: .\test_mcp.ps1
 
-$base_ai   = "http://localhost:8001"
+$base_ai   = "http://localhost:8000"
 $base_mcp  = "http://localhost:8002"
 
 function Test-Endpoint {
