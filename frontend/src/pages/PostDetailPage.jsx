@@ -80,6 +80,7 @@ export default function PostDetailPage() {
   }, [id, navigate])
 
   const handleImprove = async () => {
+    if (improving) return
     setImproving(true)
     setImproveResult(null)
     try {

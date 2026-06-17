@@ -4,6 +4,7 @@ import os
 import time
 from dotenv import load_dotenv
 from auth import CurrentUser, require_user
+from rate_limit import check_rate_limit
 
 load_dotenv(encoding='utf-8')
 
@@ -11,7 +12,7 @@ router = APIRouter()
 
 # GitHub Personal Access Token — 없으면 시간당 60회, 있으면 5000회
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-GITHUB_CACHE_TTL_SECONDS = 600
+GITHUB_CACHE_TTL_SECONDS = int(os.getenv("GITHUB_CACHE_TTL_SECONDS", "3600"))
 github_repo_cache = {}
 
 
@@ -28,6 +29,7 @@ def parse_github_url(url: str):
 
 @router.get("/github/repo")
 async def get_github_repo(url: str, current_user: CurrentUser = Depends(require_user)):
+    check_rate_limit(current_user, "github_repo")
     """
     GitHub URL을 받아 레포지토리 기본 정보 반환
     - url: 게시글에 저장된 github_url (e.g. https://github.com/user/repo)

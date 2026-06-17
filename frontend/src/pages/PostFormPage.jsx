@@ -101,7 +101,7 @@ export default function PostFormPage() {
   }
 
   const handleSuggestTags = async () => {
-    if (!form.title.trim() && !form.content.trim()) return
+    if (loadingSuggestions || (!form.title.trim() && !form.content.trim())) return
     setLoadingSuggestions(true)
     setSuggestedTags([])
 

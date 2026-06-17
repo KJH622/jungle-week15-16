@@ -4,6 +4,7 @@ import axios from 'axios'
 // vite.config.js의 /ai 프록시를 통해 실제 요청은 http://localhost:8000으로 전달
 const aiApi = axios.create({
   baseURL: '/ai',
+  timeout: 45000,
 })
 
 // 요청 인터셉터 — JWT 토큰 자동 주입 (인증이 필요한 AI 엔드포인트 대비)

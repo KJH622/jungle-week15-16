@@ -19,7 +19,7 @@ export default function SearchPage() {
   const navigate = useNavigate()
 
   const handleSearch = async () => {
-    if (!query.trim()) return
+    if (loading || !query.trim()) return
     setLoading(true)
     setError('')
     setAnswer('')
@@ -38,7 +38,7 @@ export default function SearchPage() {
   }
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !loading) {
       e.preventDefault()
       handleSearch()
     }

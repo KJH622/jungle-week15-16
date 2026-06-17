@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 from auth import CurrentUser, require_user
 from database import search_post_embeddings
+from rate_limit import check_rate_limit
+from usage_log import log_openai_usage
 
 load_dotenv(encoding="utf-8")
 
@@ -79,16 +81,19 @@ TOOLS = [
 ]
 
 
-def get_embedding(text: str) -> list[float]:
+def get_embedding(text: str, endpoint: str | None = None, user: str | None = None) -> list[float]:
     response = client.embeddings.create(
         model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         input=text,
     )
+    if endpoint and user:
+        log_openai_usage(endpoint, user, response, {"operation": "embedding"})
     return response.data[0].embedding
 
 
-def execute_search_posts(query: str) -> dict:
-    query_embedding = get_embedding(query)
+def execute_search_posts(query: str, current_user: CurrentUser | None = None) -> dict:
+    user_email = current_user.email if current_user else "system"
+    query_embedding = get_embedding(query, "agent_search_posts", user_email)
     posts = search_post_embeddings(query_embedding, limit=3)
 
     return {
@@ -126,6 +131,7 @@ async def execute_get_github_info(url: str) -> dict:
 
 @router.post("/chat")
 async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(require_user)):
+    check_rate_limit(current_user, "agent_chat")
     messages = [
         {
             "role": "system",
@@ -148,6 +154,12 @@ async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(
             messages=messages,
             tools=TOOLS,
             tool_choice="auto",
+        )
+        log_openai_usage(
+            "agent_chat",
+            current_user.email,
+            response,
+            {"tool_calls": len(tools_used)},
         )
 
         choice = response.choices[0]
@@ -178,7 +190,7 @@ async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(
             tools_used.append(name)
 
             if name == "search_posts":
-                result = execute_search_posts(args["query"])
+                result = execute_search_posts(args["query"], current_user)
             elif name == "get_github_info":
                 result = await execute_get_github_info(args["url"])
             else:
@@ -205,6 +217,12 @@ async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(
             },
         ],
     )
+    log_openai_usage(
+        "agent_chat_final",
+        current_user.email,
+        final_response,
+        {"tool_calls": len(tools_used)},
+    )
     choice = final_response.choices[0]
     return {
         "answer": choice.message.content,
@@ -214,9 +232,10 @@ async def agent_chat(request: AgentRequest, current_user: CurrentUser = Depends(
 
 @router.post("/improve")
 async def improve_project(request: ImproveRequest, current_user: CurrentUser = Depends(require_user)):
+    check_rate_limit(current_user, "agent_improve")
     github_info = await execute_get_github_info(request.github_url)
     search_query = f"{request.title} {request.content[:200]}"
-    similar_posts = execute_search_posts(search_query)
+    similar_posts = execute_search_posts(search_query, current_user)
 
     github_summary = json.dumps(github_info, ensure_ascii=False, indent=2)
     similar_summary = ""
@@ -250,6 +269,12 @@ async def improve_project(request: ImproveRequest, current_user: CurrentUser = D
         model="gpt-4o-mini",
         messages=messages,
         response_format={"type": "json_object"},
+    )
+    log_openai_usage(
+        "agent_improve",
+        current_user.email,
+        response,
+        {"similar_posts": len(similar_posts["posts"])},
     )
 
     raw = response.choices[0].message.content

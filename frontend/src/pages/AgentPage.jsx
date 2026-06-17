@@ -30,7 +30,7 @@ export default function AgentPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!query.trim()) return
+    if (loading || !query.trim()) return
 
     setLoading(true)
     setResult(null)
@@ -123,6 +123,7 @@ export default function AgentPage() {
                   key={example}
                   type="button"
                   className="example-card"
+                  disabled={loading}
                   onClick={() => setQuery(example)}
                 >
                   {example}

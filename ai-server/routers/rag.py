@@ -14,6 +14,8 @@ from database import (
     search_post_embeddings,
     upsert_post_embedding,
 )
+from rate_limit import check_rate_limit
+from usage_log import log_openai_usage
 
 load_dotenv(encoding="utf-8")
 
@@ -36,11 +38,13 @@ class SuggestTagsRequest(BaseModel):
     content: str
 
 
-def get_embedding(text: str) -> list[float]:
+def get_embedding(text: str, endpoint: str | None = None, user: str | None = None) -> list[float]:
     response = client.embeddings.create(
         model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         input=text,
     )
+    if endpoint and user:
+        log_openai_usage(endpoint, user, response, {"operation": "embedding"})
     return response.data[0].embedding
 
 
@@ -67,7 +71,8 @@ def embed_posts():
 
 @router.post("/search")
 def search_posts(request: SearchRequest, current_user: CurrentUser = Depends(require_user)):
-    query_embedding = get_embedding(request.query)
+    check_rate_limit(current_user, "rag_search")
+    query_embedding = get_embedding(request.query, "rag_search", current_user.email)
     posts = search_post_embeddings(query_embedding, limit=3)
 
     context = ""
@@ -94,6 +99,7 @@ def search_posts(request: SearchRequest, current_user: CurrentUser = Depends(req
             },
         ],
     )
+    log_openai_usage("rag_search", current_user.email, response, {"sources": len(posts)})
 
     return {
         "answer": response.choices[0].message.content,
@@ -106,8 +112,9 @@ def search_posts(request: SearchRequest, current_user: CurrentUser = Depends(req
 
 @router.post("/similar")
 def similar_posts(request: SimilarRequest, current_user: CurrentUser = Depends(require_user)):
+    check_rate_limit(current_user, "rag_similar")
     query_text = request.content[:500]
-    query_embedding = get_embedding(query_text)
+    query_embedding = get_embedding(query_text, "rag_similar", current_user.email)
     results = search_post_embeddings(query_embedding, limit=5)
 
     posts = []
@@ -138,8 +145,9 @@ def similar_posts(request: SimilarRequest, current_user: CurrentUser = Depends(r
 
 @router.post("/suggest-tags")
 def suggest_tags(request: SuggestTagsRequest, current_user: CurrentUser = Depends(require_user)):
+    check_rate_limit(current_user, "rag_suggest_tags")
     query_text = f"{request.title} {request.content[:300]}"
-    query_embedding = get_embedding(query_text)
+    query_embedding = get_embedding(query_text, "rag_suggest_tags", current_user.email)
     posts = search_post_embeddings(query_embedding, limit=5)
 
     tag_counts: dict[str, int] = {}
