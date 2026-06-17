@@ -246,10 +246,13 @@ async def improve_project(request: ImproveRequest, current_user: CurrentUser = D
         {
             "role": "system",
             "content": (
-                "You are a project improvement expert. Based on GitHub repository "
-                "status and similar projects, return 3 to 5 concrete improvement "
-                "suggestions as JSON only. Use this shape: "
-                '{"suggestions":[{"title":"title","reason":"reason","how":"how"}]}'
+                "당신은 사이드 프로젝트 개선 제안 전문가입니다. "
+                "GitHub 저장소 상태와 유사 프로젝트 정보를 바탕으로 "
+                "구체적인 개선 제안을 3개에서 5개까지 JSON만 반환하세요. "
+                "반드시 한국어로만 작성하세요. title, reason, how 값은 모두 한국어여야 합니다. "
+                "기술명, 라이브러리명, 파일명처럼 번역하면 어색한 고유명사만 영어를 허용합니다. "
+                "JSON 키 이름은 반드시 다음 형태를 유지하세요: "
+                '{"suggestions":[{"title":"한국어 제목","reason":"한국어 이유","how":"한국어 실행 방법"}]}'
             ),
         },
         {
@@ -260,7 +263,8 @@ async def improve_project(request: ImproveRequest, current_user: CurrentUser = D
                 f"Content: {request.content[:300]}\n\n"
                 f"[GitHub]\n{github_summary}\n\n"
                 f"[Similar projects]\n{similar_summary}\n\n"
-                "Return improvement suggestions as JSON."
+                "개선 제안을 반드시 한국어 JSON으로만 반환하세요. "
+                "title, reason, how의 값에 영어 문장을 쓰지 마세요."
             ),
         },
     ]

@@ -5,6 +5,7 @@ import aiApi from '../api/aiApi'
 import AIBadge from '../components/ui/AIBadge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import ErrorMessage from '../components/ui/ErrorMessage'
 import Select from '../components/ui/Select'
 import TagChip from '../components/ui/TagChip'
 import Textarea from '../components/ui/Textarea'
@@ -28,6 +29,7 @@ export default function PostFormPage() {
   const [projectTypes, setProjectTypes] = useState([])
   const [suggestedTags, setSuggestedTags] = useState([])
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [suggestionError, setSuggestionError] = useState('')
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -100,41 +102,91 @@ export default function PostFormPage() {
     }
   }
 
+  const hasTextForTagSuggestion = Boolean(form.title.trim() || form.content.trim())
+  const hasGithubForTagSuggestion = form.githubUrl.trim().startsWith('https://github.com/')
+  const canSuggestTags = hasTextForTagSuggestion || hasGithubForTagSuggestion
+
   const handleSuggestTags = async () => {
-    if (loadingSuggestions || (!form.title.trim() && !form.content.trim())) return
+    if (loadingSuggestions || !canSuggestTags) return
     setLoadingSuggestions(true)
     setSuggestedTags([])
+    setSuggestionError('')
+
+    const title = form.title.trim()
+    const content = form.content.trim()
+    const githubUrl = form.githubUrl.trim()
 
     try {
-      const ragRes = await aiApi.post('/rag/suggest-tags', {
-        title: form.title,
-        content: form.content,
-      })
-      const ragTags = ragRes.data.tags || []
+      let ragTags = []
+      let ragFailed = false
+      let githubSeed = null
+      if (title || content) {
+        try {
+          const ragRes = await aiApi.post('/rag/suggest-tags', { title, content })
+          ragTags = ragRes.data.tags || []
+        } catch {
+          ragFailed = true
+        }
+      }
 
       let githubTags = []
-      if (form.githubUrl.trim().startsWith('https://github.com/')) {
+      if (githubUrl.startsWith('https://github.com/')) {
         try {
-          const ghRes = await aiApi.get(`/mcp/github/repo?url=${encodeURIComponent(form.githubUrl)}`)
+          const ghRes = await aiApi.get(`/mcp/github/repo?url=${encodeURIComponent(githubUrl)}`)
           if (!ghRes.data.error) {
+            const repo = ghRes.data
             const topics = (ghRes.data.topics || []).map((topic) => ({ name: topic, source: 'github' }))
             const language = ghRes.data.language && ghRes.data.language !== 'Unknown'
               ? [{ name: ghRes.data.language, source: 'github' }]
               : []
             githubTags = [...topics, ...language]
+            if (!title && !content) {
+              githubSeed = {
+                title: repo.full_name || repo.name || '',
+                content: [
+                  repo.description,
+                  repo.language && repo.language !== 'Unknown' ? repo.language : '',
+                  ...(repo.topics || []),
+                ].filter(Boolean).join(' '),
+              }
+            }
           }
         } catch {
-          // GitHub 조회가 실패해도 RAG 추천은 표시한다.
+          // GitHub 조회가 실패해도 제목/내용 기반 추천은 유지한다.
         }
       }
 
-      const githubNames = new Set(githubTags.map((tag) => tag.name))
-      setSuggestedTags([
+      if (githubSeed && (githubSeed.title || githubSeed.content)) {
+        try {
+          const ragRes = await aiApi.post('/rag/suggest-tags', githubSeed)
+          ragTags = [...ragTags, ...(ragRes.data.tags || [])]
+        } catch {
+          ragFailed = true
+        }
+      }
+
+      const addedNames = new Set()
+      const mergedTags = [
         ...githubTags,
-        ...ragTags.filter((tag) => !githubNames.has(tag.name)),
-      ])
+        ...ragTags,
+      ].filter((tag) => {
+        const name = tag.name?.trim()
+        if (!name || addedNames.has(name.toLowerCase()) || form.tags.includes(name)) return false
+        addedNames.add(name.toLowerCase())
+        return true
+      })
+
+      setSuggestedTags(mergedTags)
+      if (mergedTags.length === 0) {
+        setSuggestionError(
+          ragFailed
+            ? 'RAG 태그 추천에 실패했습니다. 잠시 후 다시 시도해주세요.'
+            : '추천할 새 태그를 찾지 못했습니다. 제목이나 내용을 조금 더 구체적으로 입력해보세요.'
+        )
+      }
     } catch (e) {
       console.error('태그 추천 실패', e)
+      setSuggestionError('태그 추천 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
     } finally {
       setLoadingSuggestions(false)
     }
@@ -235,7 +287,7 @@ export default function PostFormPage() {
                 <Button
                   variant="ai"
                   onClick={handleSuggestTags}
-                  disabled={loadingSuggestions || (!form.title.trim() && !form.content.trim())}
+                  disabled={loadingSuggestions || !canSuggestTags}
                 >
                   {loadingSuggestions ? '분석 중...' : '태그 추천'}
                 </Button>
@@ -291,6 +343,7 @@ export default function PostFormPage() {
                     })}
                   </div>
                 )}
+                {suggestionError && <ErrorMessage>{suggestionError}</ErrorMessage>}
               </div>
             </div>
 

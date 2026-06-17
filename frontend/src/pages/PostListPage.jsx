@@ -78,14 +78,13 @@ export default function PostListPage() {
           <div>
             <div className="page-title-row">
               <h1 className="page-title">사이드 프로젝트 게시판</h1>
-              <AIBadge>RAG 검색</AIBadge>
+              <AIBadge>관련 프로젝트 검색</AIBadge>
             </div>
-            <p className="page-subtitle">프로젝트를 공유하고 비슷한 아이디어를 RAG 검색으로 찾아보세요.</p>
+            <p className="page-subtitle">프로젝트를 공유하고 비슷한 프로젝트를 찾아보세요.</p>
           </div>
 
           <div className="action-row">
-            <Button variant="ai" onClick={() => navigate('/search')}>RAG 검색</Button>
-            <Button variant="ai" onClick={() => navigate('/agent')}>AI Agent</Button>
+            <Button variant="ai" onClick={() => navigate('/search')}>관련 프로젝트 검색</Button>
             <Button onClick={() => navigate('/posts/new')}>글 작성</Button>
             <Button variant="ghost" onClick={handleLogout}>로그아웃</Button>
           </div>
